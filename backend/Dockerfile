@@ -18,7 +18,7 @@ COPY . .
 # Create uploads directory
 RUN mkdir -p uploads
 
-EXPOSE 5000
+EXPOSE 7860
 
 # Use node directly (not nodemon) in production
 CMD ["node", "src/server.js"]
