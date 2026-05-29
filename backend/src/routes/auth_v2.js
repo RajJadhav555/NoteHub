@@ -221,7 +221,7 @@ router.post('/google', validate(googleAuthSchema), async (req, res) => {
 
   } catch (error) {
     console.error('Auth error:', error);
-    res.status(500).json({ error: 'Authentication failed. Please try again.' });
+    res.status(500).json({ error: 'Auth failed: ' + error.message });
   }
 });
 
@@ -303,7 +303,7 @@ router.post('/signup', validate(signupSchema), async (req, res) => {
     
   } catch (error) {
     console.error('Signup error:', error.message);
-    res.status(500).json({ error: 'Signup failed. Please try again.' });
+    res.status(500).json({ error: 'Signup failed: ' + error.message });
   }
 });
 
@@ -380,7 +380,7 @@ router.post('/login', validate(loginSchema), async (req, res) => {
     
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ error: 'Login failed. Please try again.' });
+    res.status(500).json({ error: 'Login failed: ' + error.message });
   }
 });
 
