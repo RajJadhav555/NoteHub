@@ -214,6 +214,62 @@ function TextViewer({ url }: { url: string }) {
 }
 
 
+function PdfViewer({ url }: { url: string }) {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const token = sessionStorage.getItem('notehub_token');
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    fetch(`${url}${url.includes('?') ? '&' : '?'}inline=true`, { headers })
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to load PDF');
+        return res.blob();
+      })
+      .then(blob => {
+        const objUrl = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+        setBlobUrl(objUrl);
+        setLoading(false);
+      })
+      .catch(err => {
+        setError(err.message);
+        setLoading(false);
+      });
+  }, [url]);
+
+  useEffect(() => {
+    return () => {
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
+  }, [blobUrl]);
+
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center h-full gap-3 animate-pulse">
+      <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+      <p className="text-sm text-gray-400">Loading PDF document securely...</p>
+    </div>
+  );
+
+  if (error) return (
+    <div className="flex flex-col items-center justify-center h-full text-red-500 p-8 text-center">
+      <ShieldAlert className="w-12 h-12 mb-4 opacity-30" />
+      <p className="text-sm font-bold">Error Loading PDF</p>
+      <p className="text-xs mt-1 text-gray-500">{error}</p>
+    </div>
+  );
+
+  return (
+    <iframe 
+        src={`${blobUrl}#toolbar=1&view=FitH`} 
+        className="w-full h-full border-none bg-stone-100 dark:bg-stone-900"
+        title="PDF Preview"
+    />
+  );
+}
+
 function HtmlViewer({ noteId }: { noteId: string | number }) {
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -417,13 +473,7 @@ export function NotePreviewModal({ isOpen, onClose, note, onDownload, userProfil
                     
                     // PDF Preview
                     if (type === 'PDF') {
-                      return (
-                        <iframe 
-                            src={`${url}${url.includes('?') ? '&' : '?'}inline=true#toolbar=1&view=FitH`} 
-                            className="w-full h-full border-none"
-                            title="PDF Preview"
-                        />
-                      );
+                      return <PdfViewer url={url} />;
                     }
                     
                     // Office Documents (DOCX, PPTX)
