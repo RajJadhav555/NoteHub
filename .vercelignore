@@ -1,0 +1,12 @@
+node_modules
+.git
+.idea
+backend
+notehub-backend
+scratch
+uploads
+dist
+.env
+*.pptx
+*.jpeg
+*.png
