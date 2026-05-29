@@ -1,0 +1,2271 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NoteHub - Academic Collaboration Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+  </head>
+  <body
+    class="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white"
+  >
+    <div id="root"></div>
+
+    <script>
+      // Simple state management
+      let currentPage = "landing";
+      let isAdminLoggedIn = false;
+      let showAdminLoginModal = false;
+      let showAdminSignupModal = false;
+      let isStudentLoggedIn = false;
+      let showStudentLoginModal = false;
+      let showStudentSignupModal = false;
+      let showNoteUploadModal = false;
+      let showNoteDetailModal = false;
+      let selectedNoteDetail = null;
+      let studentEmail = "";
+      let studentPassword = "";
+      let studentName = "";
+      let studentId = null;
+      let studentPoints = 0;
+      let studentUploads = 0;
+      let showRejectModal = false;
+      let rejectNoteId = null;
+      let rejectReason = "";
+      let adminEmail = "";
+      let adminPassword = "";
+      let currentReviewMode = "pending";
+      let newNoteTitle = "";
+      let newNoteSubject = "Computer Science";
+      let newNoteSemester = "Semester 5";
+      let studentTab = "myNotes";
+      let showCommentModal = false;
+      let commentNoteId = null;
+      let commentText = "";
+      let showGoogleAuthModal = false;
+      let googleAuthType = "admin"; // 'admin' or 'student'
+      let googleAuthEmail = "";
+      let careerChatMessages = [
+        {
+          id: 1,
+          role: "ai",
+          message: "Hello! I represent the Career AI. Based on your strong performance in Computer Engineering (Rank #1!), I see great potential in **Full Stack Development** and **AI Research**.",
+          time: "Just now"
+        }
+      ];
+
+      let chatMessages = [
+        {
+          id: 1,
+          user: "Tushar",
+          message: "Welcome to NoteHub!",
+          time: "2 mins ago",
+        },
+        {
+          id: 2,
+          user: "Omkar",
+          message: "Great platform for sharing notes!",
+          time: "1 min ago",
+        },
+      ];
+
+      const userProfile = {
+        name: "Tushar Khandagale",
+        email: "tushar@notehub.com",
+        semester: "7th Semester",
+        department: "Computer Engineering",
+        uploads: 45,
+        points: 892,
+        rank: 1,
+        badges: ["Top Contributor", "Verified Expert", "Team Player"],
+        verifiedNotes: 42,
+        collaborations: 23,
+        name: "Guest User",
+        email: "guest@notehub.com",
+        semester: "N/A",
+        department: "N/A",
+        uploads: 0,
+        points: 0,
+        rank: 0,
+        badges: [],
+        verifiedNotes: 0,
+        collaborations: 0,
+      };
+
+      const API_BASE_URL = "http://localhost:5000/api";
+      let notes = [];
+
+      // Authorized Admins Only
+      // Admins are now managed via Backend whitelist
+
+      const leaderboard = [
+        {
+          id: 1,
+          name: "Tushar Khandagale",
+          points: 892,
+          rank: 1,
+          uploads: 45,
+          badges: 3,
+        },
+        {
+          id: 2,
+          name: "Omkar Pokharkar",
+          points: 765,
+          rank: 2,
+          uploads: 38,
+          badges: 2,
+        },
+        {
+          id: 3,
+          name: "Raj Jadhav",
+          points: 698,
+          rank: 3,
+          uploads: 34,
+          badges: 2,
+        },
+        {
+          id: 4,
+          name: "Raul Vishwajeetsinh",
+          points: 587,
+          rank: 4,
+          uploads: 29,
+          badges: 1,
+        },
+      ];
+
+      function navigateTo(page) {
+        currentPage = page;
+        render();
+      }
+
+      function render() {
+        try {
+          const root = document.getElementById("root");
+          let html = getNavigation();
+
+          if (currentPage === "landing") {
+            html += getLandingPage();
+          } else if (currentPage === "notes") {
+            html += getNotesPage();
+          } else if (currentPage === "collab") {
+            html += getCollaborationPage();
+          } else if (currentPage === "gamify") {
+            html += getLeaderboardPage();
+          } else if (currentPage === "career") {
+            html += getCareerPage();
+          } else if (
+            currentPage === "student" ||
+            currentPage === "student-dashboard"
+          ) {
+            html += getStudentDashboard();
+          } else if (currentPage === "admin") {
+            html += getAdminPage();
+          }
+
+          // Add Admin Login Modal
+          if (showAdminLoginModal) {
+            html += `
+                        <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                            <div class="bg-slate-900 border border-purple-500/50 rounded-xl p-8 max-w-md w-full">
+                                <div class="flex items-center justify-between mb-6">
+                                    <h2 class="text-2xl font-bold">🔐 Admin Login</h2>
+                                    <button onclick="closeAdminLoginModal()" class="text-gray-400 hover:text-white text-2xl">✕</button>
+                                </div>
+                                <div class="space-y-4">
+                                    <div class="p-3 bg-purple-500/10 border border-purple-500/30 rounded text-xs text-purple-300">
+                                        ⚠️ Authorized Admins Only - Students cannot access
+                                    </div>
+                                    
+                                    <!-- Google Login Container -->
+                                    <div id="googleBtnAdmin" class="w-full flex justify-center"></div>
+                                    
+                                    <div class="flex items-center gap-2">
+                                        <div class="flex-1 h-px bg-gray-600"></div>
+                                        <span class="text-xs text-gray-400">OR</span>
+                                        <div class="flex-1 h-px bg-gray-600"></div>
+                                    </div>
+                                    
+                                    <input
+                                        type="email"
+                                        id="loginEmail"
+                                        placeholder="Admin Email"
+                                        class="w-full px-4 py-2 bg-slate-800/50 border border-white/10 rounded-lg focus:outline-none focus:border-blue-500 text-white"
+                                        oninput="adminEmail = this.value"
+                                    />
+                                    <input
+                                        type="password"
+                                        id="loginPassword"
+                                        placeholder="Password"
+                                        class="w-full px-4 py-2 bg-slate-800/50 border border-white/10 rounded-lg focus:outline-none focus:border-blue-500 text-white"
+                                        oninput="adminPassword = this.value"
+                                    />
+                                    <button
+                                        onclick="handleAdminLogin()"
+                                        class="w-full px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-600 rounded-lg hover:shadow-lg transition font-semibold"
+                                    >
+                                        Login
+                                    </button>
+                                    <p class="text-center text-gray-400 text-sm text-xs">
+                                        Authorized admin credentials required
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+          }
+
+          // Add Admin Signup Modal
+          if (showAdminSignupModal) {
+            html += `
+                        <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                            <div class="bg-slate-900 border border-red-500/30 rounded-xl p-8 max-w-md w-full">
+                                <div class="flex items-center justify-between mb-6">
+                                    <h2 class="text-2xl font-bold text-red-400">🔒 Admin Access Restricted</h2>
+                                    <button onclick="closeAdminSignupModal()" class="text-gray-400 hover:text-white text-2xl">✕</button>
+                                </div>
+                                <div class="space-y-4">
+                                    <div class="p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
+                                        <p class="text-sm text-red-300 font-semibold mb-3">⛔ Signup Disabled</p>
+                                        <p class="text-xs text-gray-300 mb-4">Only pre-authorized administrators can access the Admin Dashboard.</p>
+                                        <p class="text-xs text-gray-400 mb-3 font-semibold">Authorized Admins:</p>
+                                        <div class="space-y-1 text-xs text-gray-400">
+                                            <p>👤 Raj Jadhav - raj2005jadhav@gmail.com</p>
+                                            <p>👤 Tushar Khandagale - tusharsk3412@gmail.com</p>
+                                            <p>👤 Vishwajeet Raul - vishwajeetraul2611@gmail.com</p>
+                                            <p>👤 Omkar Pokharkar - omkarpokharkar9595@gmail.com</p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onclick="switchToLogin()"
+                                        class="w-full px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg font-semibold"
+                                    >
+                                        Back to Login
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+          }
+
+          // Add Note Rejection Modal
+          if (showRejectModal) {
+            html += `
+                        <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                            <div class="bg-slate-900 border border-red-500/30 rounded-xl p-8 max-w-md w-full">
+                                <div class="flex items-center justify-between mb-6">
+                                    <h2 class="text-2xl font-bold text-red-400">Reject Note</h2>
+                                    <button onclick="closeRejectModal()" class="text-gray-400 hover:text-white text-2xl">✕</button>
+                                </div>
+                                <div class="space-y-4">
+                                    <div class="p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
+                                        <p class="text-sm text-gray-300">Provide a reason why this note does not meet our content guidelines:</p>
+                                    </div>
+                                    <select 
+                                        onchange="rejectReason = this.value"
+                                        class="w-full px-4 py-2 bg-slate-800/50 border border-white/10 rounded-lg focus:outline-none focus:border-red-500 text-white"
+                                    >
+                                        <option value="">-- Select Reason --</option>
+                                        <option value="Sexual or Adult Content">🚫 Sexual/Adult Content</option>
+                                        <option value="Political Propaganda">📢 Political Propaganda</option>
+                                        <option value="Not STEM Related">❌ Not STEM Related</option>
+                                        <option value="Plagiarized Content">📋 Plagiarized Content</option>
+                                        <option value="Poor Quality">⭐ Poor Quality/Incomplete</option>
+                                        <option value="Irrelevant Material">🔀 Irrelevant Material</option>
+                                        <option value="Offensive Language">💬 Offensive Language</option>
+                                        <option value="Other">⚠️ Other</option>
+                                    </select>
+                                    <textarea
+                                        onchange="rejectReason = (rejectReason.split('\\n')[0] || '') + '\\n' + this.value"
+                                        placeholder="Additional details (optional)..."
+                                        class="w-full px-4 py-2 bg-slate-800/50 border border-white/10 rounded-lg focus:outline-none focus:border-red-500 text-white h-24"
+                                    ></textarea>
+                                    <button
+                                        onclick="rejectNote()"
+                                        class="w-full px-4 py-2 bg-red-500/20 border border-red-500/50 rounded-lg hover:bg-red-500/30 transition font-semibold text-red-400"
+                                    >
+                                        ✕ Reject Note
+                                    </button>
+                                    <button
+                                        onclick="closeRejectModal()"
+                                        class="w-full px-4 py-2 bg-slate-800/50 border border-white/10 rounded-lg hover:border-white/30 transition font-semibold"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+          }
+
+          // Add Student Login Modal
+          if (showStudentLoginModal) {
+            html += `
+                        <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                            <div class="bg-slate-900 border border-white/10 rounded-xl p-8 max-w-md w-full">
+                                <div class="flex items-center justify-between mb-6">
+                                    <h2 class="text-2xl font-bold">👨‍🎓 Student Login</h2>
+                                    <button onclick="closeStudentLoginModal()" class="text-gray-400 hover:text-white text-2xl">✕</button>
+                                </div>
+                                <div class="space-y-4">
+                                    <!-- Google Login Container -->
+                                    <div id="googleBtnLogin" class="w-full flex justify-center"></div>
+                                    
+                                    <div class="flex items-center gap-2">
+                                        <div class="flex-1 h-px bg-gray-600"></div>
+                                        <span class="text-xs text-gray-400">OR</span>
+                                        <div class="flex-1 h-px bg-gray-600"></div>
+                                    </div>
+                                    
+                                    <input
+                                        type="email"
+                                        placeholder="Student Email"
+                                        class="w-full px-4 py-2 bg-slate-800/50 border border-white/10 rounded-lg focus:outline-none focus:border-blue-500 text-white"
+                                        oninput="studentEmail = this.value"
+                                    />
+                                    <input
+                                        type="password"
+                                        placeholder="Password"
+                                        class="w-full px-4 py-2 bg-slate-800/50 border border-white/10 rounded-lg focus:outline-none focus:border-blue-500 text-white"
+                                        oninput="studentPassword = this.value"
+                                    />
+                                    <button
+                                        onclick="handleStudentLogin()"
+                                        class="w-full px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-600 rounded-lg hover:shadow-lg transition font-semibold"
+                                    >
+                                        Login
+                                    </button>
+                                    <p class="text-center text-gray-400 text-sm">
+                                        Don't have an account?
+                                        <button onclick="switchStudentToSignup()" class="text-blue-400 hover:text-blue-300">Sign up</button>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+          }
+
+          // Add Student Signup Modal
+          if (showStudentSignupModal) {
+            html += `
+                        <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                            <div class="bg-slate-900 border border-white/10 rounded-xl p-8 max-w-md w-full">
+                                <div class="flex items-center justify-between mb-6">
+                                    <h2 class="text-2xl font-bold">Create Account</h2>
+                                    <button onclick="closeStudentSignupModal()" class="text-gray-400 hover:text-white text-2xl">✕</button>
+                                </div>
+                                <div class="space-y-4">
+                                    <!-- Google Signup Container -->
+                                    <div id="googleBtnSignup" class="w-full flex justify-center"></div>
+                                    
+                                    <div class="flex items-center gap-2">
+                                        <div class="flex-1 h-px bg-gray-600"></div>
+                                        <span class="text-xs text-gray-400">OR</span>
+                                        <div class="flex-1 h-px bg-gray-600"></div>
+                                    </div>
+                                    
+                                    <input
+                                        type="text"
+                                        placeholder="Full Name"
+                                        class="w-full px-4 py-2 bg-slate-800/50 border border-white/10 rounded-lg focus:outline-none focus:border-blue-500 text-white"
+                                        oninput="studentName = this.value"
+                                    />
+                                    <input
+                                        type="email"
+                                        placeholder="Student Email"
+                                        class="w-full px-4 py-2 bg-slate-800/50 border border-white/10 rounded-lg focus:outline-none focus:border-blue-500 text-white"
+                                        oninput="studentEmail = this.value"
+                                    />
+                                    <input
+                                        type="password"
+                                        placeholder="Create Password"
+                                        class="w-full px-4 py-2 bg-slate-800/50 border border-white/10 rounded-lg focus:outline-none focus:border-blue-500 text-white"
+                                        oninput="studentPassword = this.value"
+                                    />
+                                    <button
+                                        onclick="handleStudentSignup()"
+                                        class="w-full px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg hover:shadow-lg transition font-semibold"
+                                    >
+                                        Create Account
+                                    </button>
+                                    <p class="text-center text-gray-400 text-sm">
+                                        Already have an account?
+                                        <button onclick="switchStudentToLogin()" class="text-blue-400 hover:text-blue-300">Login</button>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+          }
+
+          root.innerHTML = html;
+          attachEventListeners();
+          setTimeout(initGoogleLogin, 100); // Initialize Google Buttons after render
+        } catch (e) {
+          document.getElementById(
+            "root"
+          ).innerHTML = `<div style="padding: 20px; color: red;">Error: ${e.message}</div>`;
+          console.error(e);
+        }
+      }
+
+      function getNavigation() {
+        let navRight = "";
+        if (isStudentLoggedIn) {
+          navRight = `
+                    <button onclick="navigateTo('student-dashboard')" class="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-600 rounded-lg hover:shadow-lg transition text-sm font-semibold">
+                        📊 Dashboard
+                    </button>
+                    <button onclick="document.getElementById('quickFileInput').click()" class="px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-600 rounded-lg hover:shadow-lg transition text-sm font-semibold">
+                        📤 Upload
+                    </button>
+                    <input type="file" id="quickFileInput" style="display:none" onchange="handleQuickFileUpload(event)" accept=".pdf,.doc,.docx,.txt" />
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs bg-yellow-500/20 px-2 py-1 rounded">${studentPoints} 🎯</span>
+                        <div class="text-sm font-semibold text-blue-400">${
+                          studentName || "Student"
+                        }</div>
+                    </div>
+                    <button onclick="studentLogout()" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white border border-red-500 rounded-lg transition text-sm flex items-center gap-2 shadow-lg">
+                        🚪 Log Out
+                    </button>
+                `;
+        } else if (isAdminLoggedIn) {
+          navRight = `
+                    <button onclick="navigateTo('admin')" class="px-4 py-2 bg-gradient-to-r from-red-500 to-orange-600 rounded-lg hover:shadow-lg transition text-sm font-semibold">
+                        ⚙️ Admin Panel
+                    </button>
+                    <div class="flex items-center gap-2">
+                         <div class="text-sm font-semibold text-red-400">${
+                           studentName || "Admin"
+                         }</div>
+                    </div>
+                    <button onclick="adminLogout()" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white border border-red-500 rounded-lg transition text-sm flex items-center gap-2 shadow-lg">
+                        🚪 Log Out
+                    </button>
+                `;
+        } else {
+          navRight = `
+                    <div class="relative group">
+                        <button class="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg font-semibold text-sm flex items-center">
+                            🔐 Login
+                            <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path>
+                            </svg>
+                        </button>
+                        <div class="absolute right-0 mt-0 w-48 bg-slate-900 border border-white/20 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+                            <button onclick="openStudentLoginModal()" class="w-full text-left px-4 py-3 hover:bg-slate-800 flex items-center text-sm font-semibold border-b border-white/10">
+                                👨‍🎓 Student Login
+                            </button>
+                            <button onclick="openAdminLoginModal()" class="w-full text-left px-4 py-3 hover:bg-slate-800 flex items-center text-sm font-semibold">
+                                🔐 Admin Login
+                            </button>
+                        </div>
+                    </div>
+                `;
+        }
+
+        return `
+                <nav class="fixed w-full z-50 bg-slate-900/95 backdrop-blur-lg shadow-lg">
+                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                        <div class="flex justify-between items-center h-16">
+                            <div class="flex items-center space-x-2 cursor-pointer" onclick="navigateTo('landing')">
+                                <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                                    📖
+                                </div>
+                                <span class="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+                                    NoteHub
+                                </span>
+                            </div>
+                            <div class="hidden md:flex space-x-8">
+                                <button onclick="navigateTo('landing')" class="hover:text-blue-400 transition">Home</button>
+                                <button onclick="navigateTo('notes')" class="hover:text-blue-400 transition">Notes</button>
+                                <button onclick="navigateTo('career')" class="hover:text-blue-400 transition">Career AI</button>
+                                <button onclick="navigateTo('student')" class="hover:text-blue-400 transition">Student</button>
+                                <button onclick="navigateTo('admin')" class="hover:text-blue-400 transition">Admin</button>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                ${navRight}
+                            </div>
+                        </div>
+                    </div>
+                </nav>
+            `;
+      }
+
+      function getLandingPage() {
+        return `
+                <div class="pt-16 min-h-screen">
+                    <!-- Hero Section -->
+                    <div class="min-h-screen flex flex-col items-center justify-center px-4 py-20">
+                        <h1 class="text-6xl font-bold mb-6 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent text-center">
+                            Welcome to NoteHub
+                        </h1>
+                        <p class="text-xl text-gray-300 mb-12 max-w-2xl text-center">
+                            The ultimate academic collaboration platform for students. Share, verify, and learn from high-quality notes.
+                        </p>
+                        <div class="flex gap-4 mb-16">
+                            <button onclick="navigateTo('notes')" class="px-8 py-3 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg hover:shadow-lg transition font-semibold">
+                                Browse Notes
+                            </button>
+                            <button onclick="navigateTo('gamify')" class="px-8 py-3 border-2 border-blue-400 rounded-lg hover:bg-blue-400/10 transition font-semibold">
+                                View Leaderboard
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Collaborations Insight Section -->
+                    <div class="py-20 px-4 bg-gradient-to-r from-purple-500/10 to-pink-600/10 border-y border-white/10">
+                        <div class="max-w-7xl mx-auto">
+                            <div class="text-center mb-16">
+                                <h2 class="text-4xl font-bold mb-4">🤝 Real-Time Collaboration</h2>
+                                <p class="text-xl text-gray-300">Connect with peers in study groups and discussions</p>
+                            </div>
+                            <div class="grid md:grid-cols-3 gap-6">
+                                <div class="bg-slate-800/50 border border-white/10 rounded-xl p-6 hover:border-white/30 transition">
+                                    <div class="text-4xl mb-4">💬</div>
+                                    <h3 class="text-xl font-bold mb-3">Study Groups</h3>
+                                    <p class="text-gray-400 text-sm mb-4">Join subject-specific study groups to collaborate on assignments and prepare for exams together.</p>
+                                    <div class="text-sm text-blue-400 font-semibold">18,342+ Active Members</div>
+                                </div>
+                                <div class="bg-slate-800/50 border border-white/10 rounded-xl p-6 hover:border-white/30 transition">
+                                    <div class="text-4xl mb-4">📝</div>
+                                    <h3 class="text-xl font-bold mb-3">Discussions</h3>
+                                    <p class="text-gray-400 text-sm mb-4">Discuss verified notes with your peers, share insights, and clarify concepts together in real-time.</p>
+                                    <div class="text-sm text-purple-400 font-semibold">68% Academic Focus</div>
+                                </div>
+                                <div class="bg-slate-800/50 border border-white/10 rounded-xl p-6 hover:border-white/30 transition">
+                                    <div class="text-4xl mb-4">🌐</div>
+                                    <h3 class="text-xl font-bold mb-3">Global Network</h3>
+                                    <p class="text-gray-400 text-sm mb-4">Connect with students from different colleges and backgrounds to expand your academic network.</p>
+                                    <div class="text-sm text-pink-400 font-semibold">500+ College Community</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Leadership Insight Section -->
+                    <div class="py-20 px-4">
+                        <div class="max-w-7xl mx-auto">
+                            <div class="text-center mb-16">
+                                <h2 class="text-4xl font-bold mb-4">🏆 Gamified Leadership</h2>
+                                <p class="text-xl text-gray-300">Compete, earn achievements, and lead the leaderboard</p>
+                            </div>
+                            <div class="grid md:grid-cols-2 gap-8">
+                                <div class="bg-gradient-to-br from-yellow-500/20 to-orange-600/20 border border-yellow-500/50 rounded-xl p-8">
+                                    <div class="text-5xl mb-4">📊</div>
+                                    <h3 class="text-2xl font-bold mb-4">Global Rankings</h3>
+                                    <p class="text-gray-300 mb-6">Compete on the global leaderboard by earning points through uploads, verifications, and collaborations.</p>
+                                    <div class="space-y-3">
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-400">🥇 Top Rank Bonus</span>
+                                            <span class="font-bold text-yellow-400">+500 Points</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-400">✅ Verified Notes</span>
+                                            <span class="font-bold text-blue-400">+100 Points</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-400">🤝 Collaboration</span>
+                                            <span class="font-bold text-purple-400">+5 Points</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="bg-gradient-to-br from-purple-500/20 to-pink-600/20 border border-purple-500/50 rounded-xl p-8">
+                                    <div class="text-5xl mb-4">⭐</div>
+                                    <h3 class="text-2xl font-bold mb-4">Achievement Badges</h3>
+                                    <p class="text-gray-300 mb-6">Unlock exclusive badges as you achieve milestones and demonstrate your contributions to the community.</p>
+                                    <div class="grid grid-cols-2 gap-3">
+                                        <div class="bg-slate-800/50 p-3 rounded-lg text-center">
+                                            <div class="text-2xl mb-1">🌟</div>
+                                            <div class="text-xs font-semibold">Top Contributor</div>
+                                        </div>
+                                        <div class="bg-slate-800/50 p-3 rounded-lg text-center">
+                                            <div class="text-2xl mb-1">🏅</div>
+                                            <div class="text-xs font-semibold">Verified Expert</div>
+                                        </div>
+                                        <div class="bg-slate-800/50 p-3 rounded-lg text-center">
+                                            <div class="text-2xl mb-1">🎯</div>
+                                            <div class="text-xs font-semibold">Team Player</div>
+                                        </div>
+                                        <div class="bg-slate-800/50 p-3 rounded-lg text-center">
+                                            <div class="text-2xl mb-1">🚀</div>
+                                            <div class="text-xs font-semibold">Rising Star</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+      }
+
+      function getNotesPage() {
+        // Filter only verified notes
+        const verifiedNotes = notes.filter((note) => note.verified);
+
+        return `
+                <div class="pt-20 min-h-screen">
+                    <div class="bg-slate-900/95 backdrop-blur-lg border-b border-white/10">
+                        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <h1 class="text-3xl font-bold">📚 Verified Notes</h1>
+                                    <p class="text-gray-400">Admin-verified academic notes - Free for all</p>
+                                </div>
+                                <div class="bg-slate-800/50 px-4 py-2 rounded-lg border border-white/10">
+                                    <div class="text-sm text-gray-400">Total Verified</div>
+                                    <div class="text-2xl font-bold text-green-400">${
+                                      verifiedNotes.length
+                                    }</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                        ${
+                          verifiedNotes.length > 0
+                            ? `
+                            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                ${verifiedNotes
+                                  .map(
+                                    (note) => `
+                                    <div class="bg-slate-800/50 backdrop-blur-lg border border-white/10 rounded-xl p-6 hover:border-white/30 transition group">
+                                        <div class="flex justify-between items-start mb-4">
+                                            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-green-500/20 text-green-400 border border-green-500/50">
+                                                ✓ Verified
+                                            </span>
+                                            <span class="text-xs text-gray-400">${
+                                              note.fileType || "PDF"
+                                            }</span>
+                                        </div>
+                                        <h3 class="text-lg font-bold mb-2 group-hover:text-blue-400 transition">${
+                                          note.title
+                                        }</h3>
+                                        <p class="text-sm text-gray-400 mb-1">
+                                            By ${note.uploader}
+                                        </p>
+                                        <p class="text-sm text-gray-500 mb-4">${
+                                          note.subject
+                                        } • ${note.semester}</p>
+                                        <div class="flex items-center justify-between text-sm text-gray-400 mb-4">
+                                            <span class="flex items-center">📥 ${
+                                              note.downloads
+                                            }</span>
+                                            <span class="flex items-center">⭐ ${
+                                              note.rating || 0
+                                            }</span>
+                                            <span class="flex items-center">❤️ ${
+                                              note.likes || 0
+                                            }</span>
+                                        </div>
+                                        <button onclick="downloadNote(${
+                                          note.id
+                                        })" class="w-full px-4 py-3 bg-gradient-to-r from-blue-500 to-cyan-600 rounded-lg hover:shadow-lg transition text-sm font-semibold text-white">
+                                            📥 Download Now
+                                        </button>
+                                    </div>
+                                `
+                                  )
+                                  .join("")}
+                            </div>
+                        `
+                            : `
+                            <div class="bg-slate-800/50 backdrop-blur-lg border border-white/10 rounded-xl p-12 text-center">
+                                <div class="text-6xl mb-4">📖</div>
+                                <h2 class="text-2xl font-bold mb-2">No Verified Notes Yet</h2>
+                                <p class="text-gray-400">Check back soon for verified academic notes from our community!</p>
+                            </div>
+                        `
+                        }
+                    </div>
+                </div>
+            `;
+      }
+
+      function getCollaborationPage() {
+        return `
+                <div class="pt-20 min-h-screen">
+                    <div class="bg-slate-900/95 backdrop-blur-lg border-b border-white/10">
+                        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+                            <h1 class="text-3xl font-bold">Real-Time Collaboration 💬</h1>
+                            <p class="text-gray-400">Connect and learn with your peers</p>
+                        </div>
+                    </div>
+
+                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                        <div class="bg-slate-800/50 backdrop-blur-lg border border-white/10 rounded-xl overflow-hidden flex flex-col" style="height: 600px">
+                            <div class="p-4 border-b border-white/10 bg-slate-900/50">
+                                <h2 class="font-bold"># General</h2>
+                                <p class="text-xs text-gray-400">Real-time group discussion</p>
+                            </div>
+
+                            <div class="flex-1 overflow-y-auto p-4 space-y-4">
+                                ${chatMessages
+                                  .map(
+                                    (msg) => `
+                                    <div class="flex items-start space-x-3">
+                                        <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center font-bold">
+                                            ${msg.user[0]}
+                                        </div>
+                                        <div class="flex-1">
+                                            <div class="flex items-baseline space-x-2 mb-1">
+                                                <span class="font-semibold">${msg.user}</span>
+                                                <span class="text-xs text-gray-500">${msg.time}</span>
+                                            </div>
+                                            <p class="text-sm text-gray-300">${msg.message}</p>
+                                        </div>
+                                    </div>
+                                `
+                                  )
+                                  .join("")}
+                            </div>
+
+                            <div class="p-4 border-t border-white/10 bg-slate-900/50">
+                                <div class="flex space-x-2">
+                                    <input type="text" id="messageInput" placeholder="Message #General" 
+                                        class="flex-1 px-4 py-3 bg-slate-800 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500 transition"/>
+                                    <button onclick="sendMessage()" class="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-600 rounded-lg hover:shadow-lg transition">
+                                        📤
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+      }
+
+      function getLeaderboardPage() {
+        return `
+                <div class="pt-20 min-h-screen">
+                    <div class="bg-slate-900/95 backdrop-blur-lg border-b border-white/10">
+                        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+                            <h1 class="text-3xl font-bold">🏆 Leaderboard</h1>
+                            <p class="text-gray-400">Compete, earn, and achieve</p>
+                        </div>
+                    </div>
+
+                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                        <div class="grid lg:grid-cols-3 gap-6">
+                            <div class="bg-gradient-to-br from-purple-500/20 to-pink-600/20 border border-purple-500/50 rounded-xl p-6">
+                                <div class="text-center mb-6">
+                                    <div class="w-24 h-24 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-3xl font-bold mx-auto mb-4">
+                                        ${userProfile.name[0]}
+                                    </div>
+                                    <h2 class="text-2xl font-bold mb-1">${
+                                      userProfile.name
+                                    }</h2>
+                                    <p class="text-gray-400">${
+                                      userProfile.department
+                                    }</p>
+                                </div>
+
+                                <div class="space-y-4">
+                                    <div class="bg-slate-900/50 rounded-lg p-4">
+                                        <div class="flex justify-between items-center mb-2">
+                                            <span class="text-gray-400">Your Rank</span>
+                                            <span class="text-3xl font-bold text-yellow-400">#${
+                                              userProfile.rank
+                                            }</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="bg-slate-900/50 rounded-lg p-4">
+                                        <div class="flex justify-between mb-2">
+                                            <span class="text-gray-400">Total Points</span>
+                                            <span class="text-2xl font-bold text-purple-400">${
+                                              userProfile.points
+                                            }</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="bg-slate-900/50 rounded-lg p-4">
+                                        <div class="text-sm font-semibold mb-3">Your Badges</div>
+                                        <div class="flex flex-wrap gap-2">
+                                            ${userProfile.badges
+                                              .map(
+                                                (badge) => `
+                                                <span class="px-3 py-1 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full text-xs font-semibold">
+                                                    ${badge}
+                                                </span>
+                                            `
+                                              )
+                                              .join("")}
+                                        </div>
+                                    </div>
+
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div class="bg-slate-900/50 rounded-lg p-3 text-center">
+                                            <div class="text-2xl font-bold mb-1">${
+                                              userProfile.uploads
+                                            }</div>
+                                            <div class="text-xs text-gray-400">Uploads</div>
+                                        </div>
+                                        <div class="bg-slate-900/50 rounded-lg p-3 text-center">
+                                            <div class="text-2xl font-bold mb-1">${
+                                              userProfile.verifiedNotes
+                                            }</div>
+                                            <div class="text-xs text-gray-400">Verified</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="lg:col-span-2 bg-slate-800/50 backdrop-blur-lg border border-white/10 rounded-xl p-6">
+                                <h2 class="text-2xl font-bold mb-6">📈 Global Leaderboard</h2>
+
+                                <div class="space-y-3">
+                                    ${leaderboard
+                                      .map(
+                                        (user, index) => `
+                                        <div class="p-4 rounded-lg border transition ${
+                                          user.name === userProfile.name
+                                            ? "bg-purple-500/20 border-purple-500/50"
+                                            : "bg-slate-900/50 border-white/10 hover:border-white/30"
+                                        }">
+                                            <div class="flex items-center justify-between">
+                                                <div class="flex items-center space-x-4">
+                                                    <div class="w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg ${
+                                                      index === 0
+                                                        ? "bg-yellow-500 text-slate-900"
+                                                        : index === 1
+                                                        ? "bg-gray-400 text-slate-900"
+                                                        : index === 2
+                                                        ? "bg-orange-600 text-white"
+                                                        : "bg-slate-700"
+                                                    }">
+                                                        ${user.rank}
+                                                    </div>
+                                                    <div>
+                                                        <div class="font-bold">${
+                                                          user.name
+                                                        }</div>
+                                                        <div class="text-sm text-gray-400">${
+                                                          user.uploads
+                                                        } uploads • ${
+                                          user.badges
+                                        } badges</div>
+                                                    </div>
+                                                </div>
+                                                <div class="text-right">
+                                                    <div class="text-2xl font-bold text-purple-400">${
+                                                      user.points
+                                                    }</div>
+                                                    <div class="text-xs text-gray-400">points</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `
+                                      )
+                                      .join("")}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+      }
+
+      function sendMessage() {
+        const input = document.getElementById("messageInput");
+        if (input && input.value.trim()) {
+          chatMessages.push({
+            id: chatMessages.length + 1,
+            user: userProfile.name.split(" ")[0],
+            message: input.value,
+            time: "just now",
+          });
+          input.value = "";
+          render();
+        }
+      }
+
+// Gemini API Key is now secured in backend
+
+
+      async function callGeminiAPI(userQuery) {
+          // Show "Thinking..." state
+          const tempId = Date.now();
+          careerChatMessages.push({
+            id: tempId,
+            role: "ai",
+            message: "Thinking... 🧠",
+            time: "Just now"
+          });
+          render();
+
+          try {
+              // Call Backend Proxy
+              const response = await fetch(`${API_BASE_URL}/career/chat`, {
+                  method: "POST",
+                  headers: {
+                      "Content-Type": "application/json"
+                  },
+                  body: JSON.stringify({ message: userQuery })
+              });
+
+              if (!response.ok) {
+                  const errorData = await response.json().catch(() => ({}));
+                  console.error("Gemini API Error details:", errorData);
+                  throw new Error(errorData.error?.message || `API Error: ${response.status} ${response.statusText}`);
+              }
+
+              const data = await response.json();
+              let aiMsg = data.candidates[0].content.parts[0].text;
+              
+              // Simple Markdown parsing (Bold **text**)
+              aiMsg = aiMsg.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+              // Remove "Thinking..." and add real response
+              careerChatMessages = careerChatMessages.filter(m => m.id !== tempId);
+              careerChatMessages.push({
+                id: Date.now(),
+                role: "ai",
+                message: aiMsg,
+                time: "Just now"
+              });
+              
+          } catch (error) {
+              console.error("Gemini Connect Error:", error);
+              // Remove thinking
+              careerChatMessages = careerChatMessages.filter(m => m.id !== tempId);
+              careerChatMessages.push({
+                id: Date.now(),
+                role: "ai",
+                message: `⚠️ **Connection Error:** ${error.message}\n\nPlease check your internet connection or API key.`,
+                time: "Just now"
+              });
+          }
+          
+          render();
+      }
+
+      function sendCareerMessage() {
+        const input = document.getElementById("careerInput");
+        if (input && input.value.trim()) {
+          const userMsg = input.value;
+          
+          // Add User Message
+          careerChatMessages.push({
+            id: careerChatMessages.length + 1,
+            role: "user",
+            message: userMsg,
+            time: "Just now"
+          });
+          
+          input.value = "";
+          render(); 
+          
+          // Call Real API
+          callGeminiAPI(userMsg);
+        }
+      }
+
+      function attachEventListeners() {
+        // Collab Chat Listener
+        const input = document.getElementById("messageInput");
+        if (input) {
+          input.addEventListener("keypress", (e) => {
+            if (e.key === "Enter") {
+              sendMessage();
+            }
+          });
+        }
+        
+        // Career Chain Listener
+        const careerInput = document.getElementById("careerInput");
+        if (careerInput) {
+          careerInput.addEventListener("keypress", (e) => {
+            if (e.key === "Enter") {
+              sendCareerMessage();
+            }
+          });
+          // Auto-scroll to bottom
+          const container = document.getElementById("careerChatContainer");
+          if(container) container.scrollTop = container.scrollHeight;
+        }
+      }
+
+      function getCareerPage() {
+        return `
+                <div class="pt-20 min-h-screen">
+                    <div class="bg-slate-900/95 backdrop-blur-lg border-b border-white/10">
+                        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center space-x-4">
+                                    <div class="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center text-2xl">
+                                        🧠
+                                    </div>
+                                    <div>
+                                        <h1 class="text-2xl font-bold">AI Career Guidance ✨</h1>
+                                        <p class="text-sm text-gray-400">Personalized career planning powered by AI</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                        <div class="mb-8">
+                            <h2 class="text-3xl font-bold mb-2">Recommended Career Paths</h2>
+                            <p class="text-gray-400">Based on your profile, interests: Software Development, AI/ML, Cloud Computing</p>
+                        </div>
+                        <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <div class="bg-slate-800/50 backdrop-blur-lg border border-white/10 rounded-xl p-6 hover:border-white/30 transition">
+                                <div class="flex justify-between items-start mb-4">
+                                    <div class="text-3xl">💼</div>
+                                    <div class="text-right">
+                                        <div class="text-2xl font-bold">95%</div>
+                                        <div class="text-xs text-gray-400">Match</div>
+                                    </div>
+                                </div>
+                                <h3 class="text-xl font-bold mb-2">Software Engineer</h3>
+                                <p class="text-gray-400 text-sm mb-4">Build applications and systems using programming languages</p>
+                                <div class="mb-4">
+                                    <div class="text-sm font-semibold mb-2">Key Skills:</div>
+                                    <div class="flex flex-wrap gap-2">
+                                        <span class="px-3 py-1 bg-slate-900/50 border border-white/10 rounded-full text-xs">Java</span>
+                                        <span class="px-3 py-1 bg-slate-900/50 border border-white/10 rounded-full text-xs">Python</span>
+                                        <span class="px-3 py-1 bg-slate-900/50 border border-white/10 rounded-full text-xs">React</span>
+                                        <span class="px-3 py-1 bg-slate-900/50 border border-white/10 rounded-full text-xs">Node.js</span>
+                                    </div>
+                                </div>
+                                <div class="pt-4 border-t border-white/10">
+                                    <div class="text-sm text-gray-400">Salary Range</div>
+                                    <div class="font-bold text-green-400">6-15 LPA</div>
+                                </div>
+                            </div>
+
+                            <div class="bg-slate-800/50 backdrop-blur-lg border border-white/10 rounded-xl p-6 hover:border-white/30 transition">
+                                <div class="flex justify-between items-start mb-4">
+                                    <div class="text-3xl">💼</div>
+                                    <div class="text-right">
+                                        <div class="text-2xl font-bold">88%</div>
+                                        <div class="text-xs text-gray-400">Match</div>
+                                    </div>
+                                </div>
+                                <h3 class="text-xl font-bold mb-2">Data Scientist</h3>
+                                <p class="text-gray-400 text-sm mb-4">Analyze complex data and build predictive models</p>
+                                <div class="mb-4">
+                                    <div class="text-sm font-semibold mb-2">Key Skills:</div>
+                                    <div class="flex flex-wrap gap-2">
+                                        <span class="px-3 py-1 bg-slate-900/50 border border-white/10 rounded-full text-xs">Python</span>
+                                        <span class="px-3 py-1 bg-slate-900/50 border border-white/10 rounded-full text-xs">ML</span>
+                                        <span class="px-3 py-1 bg-slate-900/50 border border-white/10 rounded-full text-xs">Statistics</span>
+                                        <span class="px-3 py-1 bg-slate-900/50 border border-white/10 rounded-full text-xs">SQL</span>
+                                    </div>
+                                </div>
+                                <div class="pt-4 border-t border-white/10">
+                                    <div class="text-sm text-gray-400">Salary Range</div>
+                                    <div class="font-bold text-green-400">8-20 LPA</div>
+                                </div>
+                            </div>
+
+                            <div class="bg-slate-800/50 backdrop-blur-lg border border-white/10 rounded-xl p-6 hover:border-white/30 transition">
+                                <div class="flex justify-between items-start mb-4">
+                                    <div class="text-3xl">💼</div>
+                                    <div class="text-right">
+                                        <div class="text-2xl font-bold">82%</div>
+                                        <div class="text-xs text-gray-400">Match</div>
+                                    </div>
+                                </div>
+                                <h3 class="text-xl font-bold mb-2">Cloud Engineer</h3>
+                                <p class="text-gray-400 text-sm mb-4">Design and manage cloud infrastructure</p>
+                                <div class="mb-4">
+                                    <div class="text-sm font-semibold mb-2">Key Skills:</div>
+                                    <div class="flex flex-wrap gap-2">
+                                        <span class="px-3 py-1 bg-slate-900/50 border border-white/10 rounded-full text-xs">AWS</span>
+                                        <span class="px-3 py-1 bg-slate-900/50 border border-white/10 rounded-full text-xs">Azure</span>
+                                        <span class="px-3 py-1 bg-slate-900/50 border border-white/10 rounded-full text-xs">Docker</span>
+                                        <span class="px-3 py-1 bg-slate-900/50 border border-white/10 rounded-full text-xs">Kubernetes</span>
+                                    </div>
+                                </div>
+                                <div class="pt-4 border-t border-white/10">
+                                    <div class="text-sm text-gray-400">Salary Range</div>
+                                    <div class="font-bold text-green-400">7-18 LPA</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-12 bg-slate-900/50 border border-purple-500/50 rounded-xl overflow-hidden flex flex-col h-[600px]">
+                            <div class="p-6 bg-gradient-to-r from-purple-900/50 to-pink-900/50 border-b border-white/10">
+                                 <div class="flex items-center gap-4">
+                                     <div class="w-10 h-10 bg-purple-500 rounded-full flex items-center justify-center text-xl">🤖</div>
+                                     <div>
+                                         <h3 class="font-bold text-lg">AI Career Advisor</h3>
+                                         <p class="text-xs text-purple-200">Online • Powered by Gemini</p>
+                                     </div>
+                                 </div>
+                            </div>
+                            
+                            <div class="flex-1 p-6 overflow-y-auto space-y-4" id="careerChatContainer">
+                                ${careerChatMessages.map(msg => `
+                                    <div class="flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}">
+                                        <div class="max-w-[80%] ${msg.role === 'user' ? 'bg-blue-600 rounded-tr-none' : 'bg-slate-700 rounded-tl-none'} p-4 rounded-xl shadow-lg">
+                                            <p class="text-xs border-b border-white/10 pb-1 mb-2 font-semibold text-white/50 uppercase tracking-wider">
+                                                ${msg.role === 'user' ? 'You' : 'AI Advisor'}
+                                            </p>
+                                            <div class="text-white leading-relaxed">${msg.message.replace(/\n/g, '<br/>')}</div>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                            
+                            <div class="p-4 bg-slate-800/50 border-t border-white/10">
+                                <div class="flex gap-2">
+                                    <input type="text" id="careerInput" placeholder="Ask about career paths, salaries, or skills..." 
+                                        class="flex-1 bg-slate-900 border border-white/10 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500 transition text-white placeholder-gray-500"/>
+                                    <button onclick="sendCareerMessage()" class="px-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg font-bold transition text-white shadow-lg shadow-purple-900/20">
+                                        Send 🚀
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+      }
+
+      function getStudentDashboard() {
+        if (!isStudentLoggedIn) {
+          return `
+                    <div class="pt-20 min-h-screen flex items-center justify-center px-4">
+                        <div class="text-center">
+                            <div class="text-6xl mb-4">🔒</div>
+                            <h2 class="text-3xl font-bold mb-4">Please Login First</h2>
+                            <p class="text-gray-400 mb-8">Sign in to access your student dashboard</p>
+                            <button onclick="openStudentLoginModal()" class="px-8 py-3 bg-blue-500 hover:bg-blue-600 rounded-lg font-semibold">
+                                Login as Student
+                            </button>
+                        </div>
+                    </div>
+                `;
+        }
+
+        return `
+                <div class="pt-20 min-h-screen pb-20">
+                    <!-- Student Header -->
+                    <div class="bg-gradient-to-r from-blue-500 to-cyan-600 p-8 mb-8">
+                        <div class="max-w-7xl mx-auto">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <h1 class="text-4xl font-bold mb-2">Welcome back, ${studentName}! 👋</h1>
+                                    <p class="text-blue-100">Keep learning and sharing knowledge with fellow students</p>
+                                </div>
+                                <div class="flex gap-4">
+                                    <div class="bg-white/20 rounded-lg p-4 text-center">
+                                        <div class="text-3xl font-bold">${studentUploads}</div>
+                                        <div class="text-sm text-blue-100">Notes Uploaded</div>
+                                    </div>
+                                    <div class="bg-white/20 rounded-lg p-4 text-center">
+                                        <div class="text-3xl font-bold">${studentPoints}</div>
+                                        <div class="text-sm text-blue-100">Points Earned</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Student Tabs -->
+                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                        <div class="flex gap-4 mb-8 border-b border-white/10 overflow-x-auto">
+                            <button onclick="studentTab = 'myNotes'; render()" class="px-6 py-3 border-b-2 whitespace-nowrap ${
+                              studentTab === "myNotes"
+                                ? "border-blue-500 text-blue-400"
+                                : "border-transparent text-gray-400 hover:text-white"
+                            }">
+                                📝 My Notes (${
+                                  notes.filter(
+                                    (n) => n.uploader === studentName
+                                  ).length
+                                })
+                            </button>
+                            <button onclick="studentTab = 'verified'; render()" class="px-6 py-3 border-b-2 whitespace-nowrap ${
+                              studentTab === "verified"
+                                ? "border-blue-500 text-blue-400"
+                                : "border-transparent text-gray-400 hover:text-white"
+                            }">
+                                ✅ Verified Notes (${
+                                  notes.filter((n) => n.verified).length
+                                })
+                            </button>
+                            <button onclick="studentTab = 'collaboration'; render()" class="px-6 py-3 border-b-2 whitespace-nowrap ${
+                              studentTab === "collaboration"
+                                ? "border-blue-500 text-blue-400"
+                                : "border-transparent text-gray-400 hover:text-white"
+                            }">
+                                🤝 Collaborate
+                            </button>
+                            <button onclick="studentTab = 'leaderboard'; render()" class="px-6 py-3 border-b-2 whitespace-nowrap ${
+                              studentTab === "leaderboard"
+                                ? "border-blue-500 text-blue-400"
+                                : "border-transparent text-gray-400 hover:text-white"
+                            }">
+                                🏆 Leaderboard
+                            </button>
+                        </div>
+
+                        <!-- My Notes Tab -->
+                        ${
+                          studentTab === "myNotes"
+                            ? `
+                            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                ${notes
+                                  .filter((n) => n.uploader === studentName)
+                                  .map(
+                                    (note) => `
+                                    <div class="bg-slate-800/50 border border-white/10 rounded-xl p-6 hover:border-white/30 transition">
+                                        <div class="flex items-start justify-between mb-4">
+                                            <div>
+                                                <h3 class="font-bold text-lg mb-2">${
+                                                  note.title
+                                                }</h3>
+                                                <div class="text-xs text-gray-400">
+                                                    <p>${note.subject} • ${
+                                      note.semester
+                                    }</p>
+                                                </div>
+                                            </div>
+                                            <div class="text-2xl">${
+                                              note.verified ? "✅" : "⏳"
+                                            }</div>
+                                        </div>
+                                        <div class="flex gap-4 text-sm text-gray-400 mb-4">
+                                            <span>📥 ${
+                                              note.downloads
+                                            } downloads</span>
+                                            <span>⭐ ${note.rating}/5</span>
+                                        </div>
+                                        ${
+                                          note.verified
+                                            ? `
+                                            <button onclick="downloadNote(${note.id})" class="w-full px-3 py-2 bg-gradient-to-r from-green-500 to-emerald-600 rounded hover:shadow-lg transition text-sm font-semibold text-white">
+                                                📥 Download Note
+                                            </button>
+                                        `
+                                            : `
+                                            <div class="text-xs text-yellow-400 p-2 bg-yellow-500/10 rounded">⏱️ Pending Admin Review</div>
+                                        `
+                                        }
+                                    </div>
+                                `
+                                  )
+                                  .join("")}
+                            </div>
+                        `
+                            : ""
+                        }
+
+                        <!-- Verified Notes Tab -->
+                        ${
+                          studentTab === "verified"
+                            ? `
+                            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                ${notes
+                                  .filter((n) => n.verified)
+                                  .map(
+                                    (note) => `
+                                    <div class="bg-slate-800/50 border border-green-500/30 rounded-xl p-6 hover:border-green-500/60 transition">
+                                        <div class="flex items-start justify-between mb-4">
+                                            <div>
+                                                <h3 class="font-bold text-lg mb-2">${note.title}</h3>
+                                                <p class="text-xs text-gray-400">by ${note.uploader}</p>
+                                            </div>
+                                            <div class="text-2xl">✅</div>
+                                        </div>
+                                        <div class="text-sm text-gray-300 mb-4">${note.subject} • ${note.semester}</div>
+                                        <div class="flex gap-3 mb-4 text-sm">
+                                            <span class="bg-yellow-500/20 px-2 py-1 rounded">⭐ ${note.rating}</span>
+                                            <span class="bg-blue-500/20 px-2 py-1 rounded">👍 ${note.likes}</span>
+                                        </div>
+                                        <button onclick="downloadNote(${note.id})" class="w-full px-4 py-3 bg-gradient-to-r from-blue-500 to-cyan-600 rounded-lg hover:shadow-lg transition font-semibold text-white text-center">
+                                            📥 Download Note
+                                        </button>
+                                    </div>
+                                `
+                                  )
+                                  .join("")}
+                            </div>
+                        `
+                            : ""
+                        }
+
+                        <!-- Collaboration Tab -->
+                        ${
+                          studentTab === "collaboration"
+                            ? `
+                            <div class="bg-slate-800/50 border border-white/10 rounded-xl p-8">
+                                <h3 class="text-2xl font-bold mb-6">🤝 Real-time Collaboration</h3>
+                                <div class="grid md:grid-cols-2 gap-6">
+                                    <div class="bg-slate-900/50 rounded-lg p-6">
+                                        <h4 class="font-bold mb-4">💬 Discuss with Peers</h4>
+                                        <p class="text-gray-400 text-sm mb-4">Join discussions on verified notes and share insights with other students.</p>
+                                        <button onclick="alert('💬 Open discussions coming soon!')" class="px-4 py-2 bg-blue-500/20 border border-blue-500/50 rounded hover:bg-blue-500/30 text-sm font-semibold">
+                                            View Discussions
+                                        </button>
+                                    </div>
+                                    <div class="bg-slate-900/50 rounded-lg p-6">
+                                        <h4 class="font-bold mb-4">📊 Study Groups</h4>
+                                        <p class="text-gray-400 text-sm mb-4">Create or join study groups to collaborate on assignments and exams.</p>
+                                        <button onclick="alert('👥 Study groups feature coming soon!')" class="px-4 py-2 bg-purple-500/20 border border-purple-500/50 rounded hover:bg-purple-500/30 text-sm font-semibold">
+                                            Join Groups
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        `
+                            : ""
+                        }
+
+                        <!-- Leaderboard Tab -->
+                        ${
+                          studentTab === "leaderboard"
+                            ? `
+                            <div class="bg-slate-800/50 border border-white/10 rounded-xl p-8">
+                                <h3 class="text-2xl font-bold mb-6">🏆 Global Leaderboard</h3>
+                                <div class="space-y-3">
+                                    ${[...leaderboard]
+                                      .sort((a, b) => b.points - a.points)
+                                      .map(
+                                        (user, index) => `
+                                        <div class="bg-slate-900/50 border ${
+                                          user.name === studentName
+                                            ? "border-blue-500/50 bg-blue-500/10"
+                                            : "border-white/10"
+                                        } rounded-lg p-4 flex items-center justify-between">
+                                            <div class="flex items-center gap-4">
+                                                <div class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg ${
+                                                  index === 0
+                                                    ? "bg-yellow-500 text-slate-900"
+                                                    : index === 1
+                                                    ? "bg-gray-400 text-slate-900"
+                                                    : index === 2
+                                                    ? "bg-orange-600"
+                                                    : "bg-slate-700"
+                                                }">
+                                                    ${index + 1}
+                                                </div>
+                                                <div>
+                                                    <div class="font-semibold">${
+                                                      user.name
+                                                    }${
+                                          user.name === studentName
+                                            ? " (You)"
+                                            : ""
+                                        }</div>
+                                                    <div class="text-xs text-gray-400">${
+                                                      user.uploads
+                                                    } uploads • ${
+                                          user.badges
+                                        } badges</div>
+                                                </div>
+                                            </div>
+                                            <div class="text-right">
+                                                <div class="text-2xl font-bold text-purple-400">${
+                                                  user.points
+                                                }</div>
+                                                <div class="text-xs text-gray-400">points</div>
+                                            </div>
+                                        </div>
+                                    `
+                                      )
+                                      .join("")}
+                                </div>
+                            </div>
+                        `
+                            : ""
+                        }
+                    </div>
+                </div>
+            `;
+      }
+
+      function getAdminPage() {
+        // If admin is not logged in, show login/signup screen
+        if (!isAdminLoggedIn) {
+          return `
+                    <div class="pt-20 min-h-screen flex items-center justify-center">
+                        <div class="max-w-md w-full px-4">
+                            <div class="bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-lg border border-white/10 rounded-2xl p-12 text-center">
+                                <div class="w-16 h-16 bg-gradient-to-br from-red-500 to-orange-600 rounded-xl flex items-center justify-center text-3xl mx-auto mb-6">
+                                    🔐
+                                </div>
+                                <h1 class="text-3xl font-bold mb-2">Admin Access Required</h1>
+                                <p class="text-gray-400 mb-8">Please login or create an account to access the Admin Dashboard</p>
+                                
+                                <div class="space-y-3">
+                                    <button onclick="openAdminLoginModal()" class="w-full px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg hover:shadow-lg transition font-semibold text-white">
+                                        🔓 Admin Login
+                                    </button>
+                                    <button onclick="openAdminSignupModal()" class="w-full px-6 py-3 bg-slate-800/50 border border-white/10 rounded-lg hover:border-blue-500 hover:text-blue-400 transition font-semibold">
+                                        ➕ Create Admin Account
+                                    </button>
+                                </div>
+                                
+                                <div class="mt-8 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                                    <p class="text-sm text-blue-300">Demo Credentials:</p>
+                                    <p class="text-xs text-gray-400 mt-2">Email: admin@notehub.com<br/>Password: admin123</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+        }
+
+        // If logged in, show full admin dashboard
+        const verifiedCount = notes.filter((n) => n.verified).length;
+        const pendingCount = notes.length - verifiedCount;
+
+        const stats = [
+          {
+            label: "Total Notes",
+            value: notes.length,
+            change: "+12.5%",
+            icon: "📄",
+          },
+          {
+            label: "Verified Notes",
+            value: verifiedCount,
+            change: "+8.2%",
+            icon: "✓",
+          },
+          {
+            label: "Pending Verification",
+            value: pendingCount,
+            change: "-5.3%",
+            icon: "🕐",
+          },
+          {
+            label: "System Uptime",
+            value: "99.8%",
+            change: "+0.1%",
+            icon: "📊",
+          },
+        ];
+
+        return `
+                <div class="pt-20 min-h-screen">
+                    <div class="bg-slate-900/95 backdrop-blur-lg border-b border-white/10">
+                        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center space-x-4">
+                                    <div class="w-12 h-12 bg-gradient-to-br from-red-500 to-orange-600 rounded-xl flex items-center justify-center text-2xl">
+                                        ⚙️
+                                    </div>
+                                    <div>
+                                        <h1 class="text-2xl font-bold">Admin Dashboard</h1>
+                                        <p class="text-sm text-gray-400">Manage platform content and users</p>
+                                    </div>
+                                </div>
+                                <button onclick="adminLogout()" class="px-4 py-2 bg-red-500/20 border border-red-500/50 rounded-lg hover:bg-red-500/30 transition text-red-400 text-sm">
+                                    🚪 Logout
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                        <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                            ${stats
+                              .map(
+                                (stat) => `
+                                <div class="bg-slate-800/50 backdrop-blur-lg border border-white/10 rounded-xl p-6">
+                                    <div class="flex items-center justify-between mb-4">
+                                        <span class="text-3xl">${stat.icon}</span>
+                                        <span class="text-xs text-green-400">${stat.change}</span>
+                                    </div>
+                                    <div class="text-2xl font-bold">${stat.value}</div>
+                                    <div class="text-sm text-gray-400">${stat.label}</div>
+                                </div>
+                            `
+                              )
+                              .join("")}
+                        </div>
+
+                        <div class="grid lg:grid-cols-3 gap-6">
+                            <div class="lg:col-span-2">
+                                {/* Tabs for View Options */}
+                                <div class="flex gap-2 mb-6">
+                                    <button onclick="switchReviewMode('pending')" class="px-4 py-2 rounded-lg font-semibold transition ${
+                                      currentReviewMode === "pending"
+                                        ? "bg-blue-500 text-white"
+                                        : "bg-slate-800/50 border border-white/10 text-gray-400 hover:text-white"
+                                    }">
+                                        📋 Pending Review
+                                    </button>
+                                    <button onclick="switchReviewMode('ai-scan')" class="px-4 py-2 rounded-lg font-semibold transition ${
+                                      currentReviewMode === "ai-scan"
+                                        ? "bg-purple-500 text-white"
+                                        : "bg-slate-800/50 border border-white/10 text-gray-400 hover:text-white"
+                                    }">
+                                        🤖 AI Scanner
+                                    </button>
+                                    <button onclick="switchReviewMode('verified')" class="px-4 py-2 rounded-lg font-semibold transition ${
+                                      currentReviewMode === "verified"
+                                        ? "bg-green-500 text-white"
+                                        : "bg-slate-800/50 border border-white/10 text-gray-400 hover:text-white"
+                                    }">
+                                        ✓ Approved
+                                    </button>
+                                </div>
+
+                                {/* Pending Review Tab */}
+                                ${
+                                  currentReviewMode === "pending"
+                                    ? `
+                                    <div class="bg-slate-800/50 backdrop-blur-lg border border-white/10 rounded-xl p-6">
+                                        <h2 class="text-2xl font-bold mb-6">📋 Pending Notes Review</h2>
+                                        <div class="space-y-4">
+                                            ${notes
+                                              .filter((n) => !n.verified)
+                                              .map(
+                                                (note) => `
+                                                <div class="p-5 bg-slate-900/50 rounded-lg border border-yellow-500/20 hover:border-yellow-500/50 transition">
+                                                    <div class="flex justify-between items-start mb-4">
+                                                        <div class="flex-1">
+                                                            <h3 class="font-bold text-lg">${note.title}</h3>
+                                                            <p class="text-sm text-gray-400 mt-1">
+                                                                📤 Uploaded by: <span class="text-gray-300">${note.uploader}</span><br/>
+                                                                📚 Subject: <span class="text-gray-300">${note.subject}</span><br/>
+                                                                🎓 Semester: <span class="text-gray-300">${note.semester}</span>
+                                                            </p>
+                                                        </div>
+                                                        <span class="px-3 py-1 bg-yellow-500/20 text-yellow-400 rounded-full text-xs font-semibold">⏳ Pending</span>
+                                                    </div>
+                                                    <div class="flex gap-2">
+                                                        <button onclick="approveNote(${note.id})" class="flex-1 px-3 py-2 bg-green-500/20 border border-green-500/50 rounded-lg text-green-400 text-sm font-semibold hover:bg-green-500/30 transition">
+                                                            ✓ Approve
+                                                        </button>
+                                                        <button onclick="openRejectModal(${note.id})" class="flex-1 px-3 py-2 bg-red-500/20 border border-red-500/50 rounded-lg text-red-400 text-sm font-semibold hover:bg-red-500/30 transition">
+                                                            ✕ Reject
+                                                        </button>
+                                                        <button onclick="scanNoteAI(${note.id})" class="flex-1 px-3 py-2 bg-purple-500/20 border border-purple-500/50 rounded-lg text-purple-400 text-sm font-semibold hover:bg-purple-500/30 transition">
+                                                            🤖 AI Scan
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            `
+                                              )
+                                              .join("")}
+                                            ${
+                                              notes.filter((n) => !n.verified)
+                                                .length === 0
+                                                ? '<p class="text-center text-gray-400 py-8">✓ All notes have been reviewed!</p>'
+                                                : ""
+                                            }
+                                        </div>
+                                    </div>
+                                `
+                                    : ""
+                                }
+
+                                {/* AI Scanner Tab */}
+                                ${
+                                  currentReviewMode === "ai-scan"
+                                    ? `
+                                    <div class="bg-slate-800/50 backdrop-blur-lg border border-white/10 rounded-xl p-6">
+                                        <h2 class="text-2xl font-bold mb-6">🤖 AI Content Scanner</h2>
+                                        <p class="text-gray-400 mb-6">Automated detection for inappropriate content, plagiarism, and non-academic material</p>
+                                        <div class="space-y-4">
+                                            ${notes
+                                              .filter((n) => !n.verified)
+                                              .map(
+                                                (note) => `
+                                                <div class="p-5 bg-slate-900/50 rounded-lg border border-purple-500/20">
+                                                    <div class="flex justify-between items-start mb-4">
+                                                        <div>
+                                                            <h3 class="font-bold">${note.title}</h3>
+                                                            <p class="text-sm text-gray-400 mt-2">By ${note.uploader}</p>
+                                                        </div>
+                                                        <button onclick="runAIScan(${note.id})" class="px-3 py-1 bg-purple-500 rounded text-white text-xs font-semibold hover:bg-purple-600">
+                                                            Scan Now
+                                                        </button>
+                                                    </div>
+                                                    <div id="ai-result-${note.id}" class="hidden mt-4 p-4 bg-slate-800/50 rounded-lg border border-purple-500/20">
+                                                        <h4 class="font-semibold mb-3">📊 AI Scan Results:</h4>
+                                                        <div class="space-y-2 text-sm">
+                                                            <div class="flex justify-between">
+                                                                <span>✓ Academic Content:</span>
+                                                                <span class="text-green-400 font-bold">95%</span>
+                                                            </div>
+                                                            <div class="flex justify-between">
+                                                                <span>⚠️ Plagiarism Risk:</span>
+                                                                <span class="text-green-400 font-bold">2%</span>
+                                                            </div>
+                                                            <div class="flex justify-between">
+                                                                <span>🚫 Inappropriate Content:</span>
+                                                                <span class="text-green-400 font-bold">0%</span>
+                                                            </div>
+                                                            <div class="flex justify-between">
+                                                                <span>📌 STEM Related:</span>
+                                                                <span class="text-green-400 font-bold">Yes</span>
+                                                            </div>
+                                                        </div>
+                                                        <div class="mt-4 p-3 bg-green-500/10 border border-green-500/30 rounded">
+                                                            <p class="text-green-400 text-xs">✓ Content appears legitimate and suitable for publication</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            `
+                                              )
+                                              .join("")}
+                                        </div>
+                                    </div>
+                                `
+                                    : ""
+                                }
+
+                                {/* Approved Notes Tab */}
+                                ${
+                                  currentReviewMode === "verified"
+                                    ? `
+                                    <div class="bg-slate-800/50 backdrop-blur-lg border border-white/10 rounded-xl p-6">
+                                        <h2 class="text-2xl font-bold mb-6">✓ Approved Notes</h2>
+                                        <div class="space-y-3">
+                                            ${notes
+                                              .filter((n) => n.verified)
+                                              .map(
+                                                (note) => `
+                                                <div class="p-4 bg-slate-900/50 rounded-lg border border-green-500/20">
+                                                    <div class="flex justify-between items-start">
+                                                        <div>
+                                                            <h3 class="font-bold">${note.title}</h3>
+                                                            <p class="text-sm text-gray-400 mt-1">${note.uploader} • ${note.semester}</p>
+                                                        </div>
+                                                        <span class="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-xs font-semibold">✓ Verified</span>
+                                                    </div>
+                                                </div>
+                                            `
+                                              )
+                                              .join("")}
+                                            ${
+                                              notes.filter((n) => n.verified)
+                                                .length === 0
+                                                ? '<p class="text-center text-gray-400 py-8">No approved notes yet</p>'
+                                                : ""
+                                            }
+                                        </div>
+                                    </div>
+                                `
+                                    : ""
+                                }
+                            </div>
+
+                            <div class="space-y-6">
+                                <div class="bg-gradient-to-br from-blue-500/20 to-cyan-600/20 border border-blue-500/50 rounded-xl p-6">
+                                    <h3 class="text-xl font-bold mb-4">📊 Review Statistics</h3>
+                                    <div class="space-y-3">
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-400">Pending</span>
+                                            <span class="font-bold text-yellow-400">${
+                                              notes.filter((n) => !n.verified)
+                                                .length
+                                            }</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-400">Verified</span>
+                                            <span class="font-bold text-green-400">${
+                                              notes.filter((n) => n.verified)
+                                                .length
+                                            }</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-400">Verification Rate</span>
+                                            <span class="font-bold text-green-400">${Math.round(
+                                              (verifiedCount / notes.length) *
+                                                100
+                                            )}%</span>
+                                        </div>
+                                        <div class="w-full bg-slate-700 rounded-full h-2">
+                                            <div class="bg-green-500 h-2 rounded-full" style="width: ${
+                                              (verifiedCount / notes.length) *
+                                              100
+                                            }%"></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="bg-gradient-to-br from-purple-500/20 to-pink-600/20 border border-purple-500/50 rounded-xl p-6">
+                                    <h3 class="text-xl font-bold mb-4">🔒 Content Guidelines</h3>
+                                    <div class="space-y-2 text-xs text-gray-400">
+                                        <p>✓ STEM domain educational notes only</p>
+                                        <p>✓ No sexual or adult content</p>
+                                        <p>✓ No political propaganda</p>
+                                        <p>✓ No plagiarized material</p>
+                                        <p>✓ Proper academic standards</p>
+                                        <p>✓ Clear and organized format</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+      }
+
+      // Review Mode Functions
+      function switchReviewMode(mode) {
+        currentReviewMode = mode;
+        render();
+      }
+
+      async function approveNote(noteId) {
+        try {
+          const response = await fetch(
+            `${API_BASE_URL}/notes/${noteId}/verify`,
+            {
+              method: "PUT",
+            }
+          );
+          if (!response.ok) throw new Error("Failed to verify note");
+
+          alert(`✓ Note approved successfully!`);
+          loadNotesFromBackend(); // Refresh list
+        } catch (error) {
+          console.error("Error approving note:", error);
+          alert("Failed to approve note");
+        }
+      }
+
+      function openRejectModal(noteId) {
+        showRejectModal = true;
+        rejectNoteId = noteId;
+        rejectReason = "";
+        render();
+      }
+
+      function closeRejectModal() {
+        showRejectModal = false;
+        rejectNoteId = null;
+        rejectReason = "";
+        render();
+      }
+
+        async function rejectNote() {
+            if (!rejectReason.trim()) {
+                alert('Please provide a reason for rejection');
+                return;
+            }
+            
+            try {
+               const response = await fetch(`${API_BASE_URL}/notes/${rejectNoteId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (!response.ok) throw new Error('Failed to delete note');
+                
+                const note = notes.find(n => n.id === rejectNoteId);
+                alert(`✕ Note "${note ? note.title : 'Unknown'}" has been rejected.\n\nReason: ${rejectReason}`);
+                
+                closeRejectModal();
+                loadNotesFromBackend(); // Refresh list
+            } catch (error) {
+                console.error('Error rejecting note:', error);
+                alert('Failed to reject note');
+            }
+        }
+
+      function scanNoteAI(noteId) {
+        const note = notes.find((n) => n.id === noteId);
+        if (note) {
+          alert(
+            `🤖 AI Scan Complete for: "${note.title}"\n\n✅ Academic Content: 95%\n✅ Plagiarism Risk: 2%\n✅ Inappropriate Content: 0%\n✅ STEM Related: Yes\n✅ Quality: High\n\n✓ Result: Content is SUITABLE for publication\n\nRecommendation: APPROVE this note`
+          );
+        }
+      }
+
+      function runAIScan(noteId) {
+        scanNoteAI(noteId);
+      }
+
+      // Initial render
+      render();
+
+      // Admin Login/Signup Functions
+      function openAdminLoginModal() {
+        showAdminLoginModal = true;
+        adminEmail = "";
+        adminPassword = "";
+        render();
+      }
+
+      function openAdminSignupModal() {
+        showAdminSignupModal = true;
+        adminEmail = "";
+        adminPassword = "";
+        render();
+      }
+
+      function closeAdminLoginModal() {
+        showAdminLoginModal = false;
+        render();
+      }
+
+      function closeAdminSignupModal() {
+        showAdminSignupModal = false;
+        render();
+      }
+
+      function handleAdminLogin() {
+        alert("🔒 Please use 'Sign in with Google' for Admin Access.\n\nManual login is deprecated for security.");
+      }
+
+      function handleAdminSignup() {
+        alert(
+          "❌ Admin Signup Disabled\n\nOnly pre-authorized administrators can access the Admin Dashboard.\n\nIf you are an authorized admin, please use the Login button."
+        );
+        showAdminSignupModal = false;
+        render();
+      }
+
+      function adminLogout() {
+        isAdminLoggedIn = false;
+        studentName = "";
+        adminEmail = "";
+        adminPassword = "";
+        alert("Logged out successfully");
+        navigateTo("landing");
+        render();
+      }
+
+        const GOOGLE_CLIENT_ID = '1091785937553-9tt7ut2hsslcu6q816h145uq1p0ceecq.apps.googleusercontent.com'; // TODO: User to replace this
+
+        // Handle Google Response
+        async function handleCredentialResponse(response) {
+            console.log("Encoded JWT ID token: " + response.credential);
+            try {
+                const res = await fetch(`${API_BASE_URL}/auth/google`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: response.credential })
+                });
+
+                if (!res.ok) throw new Error('Google Auth Failed');
+
+                const data = await res.json();
+                console.log('Backend Auth Success:', data);
+                
+                // Determine context based on which modal was open
+                if (showAdminLoginModal) {
+                    // Admin Login Flow - Role check from Backend
+                    if (data.user.role === 'admin') {
+                        isAdminLoggedIn = true;
+                        studentName = data.user.name; 
+                        showAdminLoginModal = false;
+                        showStudentLoginModal = false;
+                        showStudentSignupModal = false;
+                        
+                        alert(`✓ Admin Access Granted!\nWelcome back, ${data.user.name}!`);
+                        navigateTo('admin');
+                    } else {
+                        alert(`❌ Access Denied!\n\n${data.user.email} is not authorized as an Administrator.`);
+                        isAdminLoggedIn = false;
+                        google.accounts.id.disableAutoSelect();
+                    }
+                } else {
+                    // Student Login Flow (Default)
+                    isStudentLoggedIn = true;
+                    studentName = data.user.name;
+                    studentEmail = data.user.email;
+                    studentId = data.user.id;
+                    studentPoints = data.user.points || 0;
+                    studentUploads = data.user.uploads || 0;
+                    
+                    // Close modals
+                    showStudentLoginModal = false;
+                    showStudentSignupModal = false;
+                    
+                    alert(`✓ Google Login Successful!\nWelcome, ${studentName}!`);
+                    navigateTo('student-dashboard');
+                }
+                
+            } catch (error) {
+                console.error("Google verify error:", error);
+                alert("Google Login failed. Please try again.");
+            }
+        }
+
+        function initGoogleLogin() {
+            if (typeof google !== 'undefined' && google.accounts) {
+                google.accounts.id.initialize({
+                    client_id: GOOGLE_CLIENT_ID,
+                    callback: handleCredentialResponse
+                });
+                
+                // Render button in all potential containers
+                const containers = ['googleBtnLogin', 'googleBtnSignup', 'googleBtnAdmin'];
+                containers.forEach(id => {
+                    const params = { 
+                        theme: 'outline', 
+                        size: 'large',
+                        width: '100%' // Responsive width
+                    };
+                    const element = document.getElementById(id);
+                    if (element) {
+                        google.accounts.id.renderButton(element, params);
+                    }
+                });
+            }
+        }
+
+      function switchToLogin() {
+        showAdminSignupModal = false;
+        showAdminLoginModal = true;
+        render();
+      }
+
+      // Student Login/Signup Functions
+      function openStudentLoginModal() {
+        showStudentLoginModal = true;
+        studentEmail = "";
+        studentPassword = "";
+        render();
+      }
+
+      function openStudentSignupModal() {
+        showStudentSignupModal = true;
+        studentName = "";
+        studentEmail = "";
+        studentPassword = "";
+        render();
+      }
+
+      function closeStudentLoginModal() {
+        showStudentLoginModal = false;
+        render();
+      }
+
+      function closeStudentSignupModal() {
+        showStudentSignupModal = false;
+        render();
+      }
+
+      function handleStudentLogin() {
+        if (studentEmail && studentPassword) {
+          isStudentLoggedIn = true;
+          studentId = Math.floor(Math.random() * 1000);
+          showStudentLoginModal = false;
+          alert("✓ Student Login Successful!");
+          studentEmail = "";
+          studentPassword = "";
+          navigateTo("student-dashboard");
+        } else {
+          alert("Please fill in all fields");
+        }
+      }
+
+      function handleStudentSignup() {
+        if (studentName && studentEmail && studentPassword) {
+          isStudentLoggedIn = true;
+          studentId = Math.floor(Math.random() * 1000);
+          studentPoints = 10;
+          studentUploads = 0;
+          showStudentSignupModal = false;
+          alert("✓ Account Created Successfully! Welcome to NoteHub");
+          studentEmail = "";
+          studentPassword = "";
+          navigateTo("student-dashboard");
+        } else {
+          alert("Please fill in all fields");
+        }
+      }
+
+      function studentLogout() {
+        isStudentLoggedIn = false;
+        studentEmail = "";
+        studentPassword = "";
+        studentName = "";
+        alert("Logged out successfully");
+        render();
+      }
+
+      function switchStudentToLogin() {
+        showStudentSignupModal = false;
+        showStudentLoginModal = true;
+        render();
+      }
+
+      function switchStudentToSignup() {
+        showStudentLoginModal = false;
+        showStudentSignupModal = true;
+        render();
+      }
+
+      // File upload handling functions
+      let selectedFile = null;
+
+      async function handleQuickFileUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const maxSize = 50 * 1024 * 1024; // 50MB
+        if (file.size > maxSize) {
+          alert("❌ File size exceeds 50MB limit");
+          return;
+        }
+
+        if (!isStudentLoggedIn) {
+          alert("Please log in first to upload notes");
+          openStudentLoginModal();
+          return;
+        }
+
+        // Prompt for note title
+        const title = prompt("📝 Enter a title for your note:");
+        if (!title || !title.trim()) {
+          alert("❌ Note title is required");
+          return;
+        }
+
+        // Prompt for subject
+        const subjects = [
+          "Computer Science",
+          "Mathematics",
+          "Physics",
+          "Chemistry",
+          "Biology",
+          "Engineering",
+        ];
+        const subject = prompt(
+          "📚 Enter subject:\n\nOptions: " + subjects.join(", ")
+        );
+        if (!subject) return;
+
+        // Prompt for semester
+        const semesters = [
+          "Semester 1",
+          "Semester 2",
+          "Semester 3",
+          "Semester 4",
+          "Semester 5",
+          "Semester 6",
+          "Semester 7",
+          "Semester 8",
+        ];
+        const semester = prompt(
+          "🎓 Select semester:\n\nOptions: " + semesters.join(", ")
+        );
+        if (!semester) return;
+
+        // Upload to backend
+        const formData = new FormData();
+        formData.append("title", title.trim());
+        formData.append("subject", subject);
+        formData.append("semester", semester);
+        formData.append("uploaderName", studentName || "Student");
+        formData.append("fileType", "PDF"); // Defaulting to PDF logic for simplicity, or could extract from file.type
+        formData.append("file", file);
+
+        try {
+          const response = await fetch(`${API_BASE_URL}/notes/upload`, {
+            method: "POST",
+            body: formData,
+          });
+          if (!response.ok) throw new Error("Upload failed");
+
+          const newNote = await response.json();
+          studentUploads += 1;
+          studentPoints += 10; // Optimistic update
+
+          alert(
+            `✅ Success!\n\nNote: "${title}" uploaded.\nYou earned 10 points!\n\nYour note will be reviewed by an admin soon.`
+          );
+          loadNotesFromBackend(); // Refresh list
+
+          // Reset file input
+          document.getElementById("quickFileInput").value = "";
+        } catch (error) {
+          console.error("Error uploading note:", error);
+          alert("Failed to upload note. Please try again.");
+        }
+      }
+
+      function handleFileSelect(event) {
+        const file = event.target.files[0];
+        if (file) {
+          const maxSize = 50 * 1024 * 1024; // 50MB
+          if (file.size > maxSize) {
+            alert("❌ File size exceeds 50MB limit");
+            return;
+          }
+          selectedFile = file;
+          document.getElementById("fileNameDisplay").textContent =
+            "✓ " + file.name;
+        }
+      }
+
+      function handleFileDrop(event) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const files = event.dataTransfer.files;
+        if (files.length > 0) {
+          const file = files[0];
+          const maxSize = 50 * 1024 * 1024; // 50MB
+          if (file.size > maxSize) {
+            alert("❌ File size exceeds 50MB limit");
+            return;
+          }
+          selectedFile = file;
+          document.getElementById("fileNameDisplay").textContent =
+            "✓ " + file.name;
+        }
+      }
+
+      // Student Upload Modal Functions
+      function openNoteUploadModal() {
+        if (!isStudentLoggedIn) {
+          alert("Please log in first to upload notes");
+          openStudentLoginModal();
+          return;
+        }
+        showNoteUploadModal = true;
+        newNoteTitle = "";
+        newNoteSubject = "Computer Science";
+        newNoteSemester = "Semester 5";
+        render();
+      }
+
+      function closeNoteUploadModal() {
+        showNoteUploadModal = false;
+        render();
+      }
+
+      async function submitNoteUpload() {
+        if (!newNoteTitle.trim()) {
+          alert("Please enter a note title");
+          return;
+        }
+        if (!selectedFile) {
+          alert("Please select a file to upload");
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append("title", newNoteTitle.trim());
+        formData.append("subject", newNoteSubject);
+        formData.append("semester", newNoteSemester);
+        formData.append("uploaderName", studentName || "Student");
+        formData.append(
+          "fileType",
+          selectedFile.type === "application/pdf" ? "PDF" : "DOC"
+        );
+        formData.append("file", selectedFile);
+
+        try {
+          const response = await fetch(`${API_BASE_URL}/notes/upload`, {
+            method: "POST",
+            body: formData,
+          });
+          if (!response.ok) throw new Error("Upload failed");
+
+          studentUploads += 1;
+          studentPoints += 5;
+          alert(
+            `✓ Note "${newNoteTitle}" uploaded successfully! You earned 5 points.\nIt will be reviewed by an admin soon.`
+          );
+
+          showNoteUploadModal = false;
+          newNoteTitle = "";
+          newNoteSubject = "Computer Science";
+          newNoteSemester = "Semester 5";
+          selectedFile = null;
+          document.getElementById("fileNameDisplay").textContent = "";
+          loadNotesFromBackend();
+        } catch (error) {
+          console.error("Error uploading note:", error);
+          alert("Failed to upload note.");
+        }
+      }
+
+      async function downloadNote(noteId) {
+        console.log("Download requested for note:", noteId);
+        const note = notes.find((n) => n.id === noteId);
+        if (!note) {
+          alert("❌ Note not found");
+          return;
+        }
+
+        if (!note.verified) {
+          alert(
+            "⏳ This note has not been verified by admins yet. Only verified notes can be downloaded."
+          );
+          return;
+        }
+
+        try {
+          // Increment download count
+          await fetch(`${API_BASE_URL}/notes/${noteId}/download`, {
+            method: "PUT",
+          });
+
+          if (note.fileName) {
+            const downloadUrl = `${API_BASE_URL}/notes/file/${note.fileName}`;
+            const link = document.createElement("a");
+            link.href = downloadUrl;
+            link.download = note.fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            alert(`✅ Download started: ${note.fileName}`);
+            loadNotesFromBackend(); // Update count in UI
+          } else {
+            alert("❌ File not available directly.");
+          }
+        } catch (error) {
+          console.error("Download error:", error);
+          alert("Failed to download note");
+        }
+      }
+
+      function switchToSignup() {
+        showAdminLoginModal = false;
+        showAdminSignupModal = true;
+        render();
+      }
+
+      // Initialize on page load
+      async function loadNotesFromBackend() {
+        try {
+          console.log("Fetching notes from backend...");
+          const response = await fetch(`${API_BASE_URL}/notes/all`);
+          if (!response.ok) throw new Error("Failed to fetch notes");
+          const data = await response.json();
+
+          // Transform backend data (snake_case) to frontend format (camelCase)
+          notes = data.map((n) => ({
+            id: n.id,
+            title: n.title,
+            uploader: n.uploader_name || "Anonymous",
+            subject: n.subject || "General",
+            semester: n.semester || "N/A",
+            uploadDate: n.upload_date
+              ? new Date(n.upload_date).toISOString().split("T")[0]
+              : new Date().toISOString().split("T")[0],
+            fileType: n.file_type || "PDF",
+            fileSize: n.file_size || "Unknown",
+            verified: n.verified,
+            downloads: parseInt(n.downloads || 0),
+            rating: parseFloat(n.rating || 0),
+            likes: parseInt(n.likes || 0),
+            fileName: n.file_name,
+            fileUrl: n.file_url,
+          }));
+
+          console.log("Notes loaded:", notes.length);
+          render();
+        } catch (error) {
+          console.error("Error loading notes:", error);
+        }
+      }
+
+      // Initialize on page load
+      document.addEventListener("DOMContentLoaded", function () {
+        loadNotesFromBackend();
+      });
+    </script>
+  </body>
+</html>

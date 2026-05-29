@@ -1,0 +1,29 @@
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+backend/node_modules/
+
+# Build output
+dist/
+
+# Uploads (user content)
+uploads/
+backend/uploads/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+frontend.log
+
+# OS
+Thumbs.db
+.DS_Store

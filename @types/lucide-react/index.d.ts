@@ -1,0 +1,43 @@
+declare module 'lucide-react' {
+  export const BookOpen: any;
+  export const Shield: any;
+  export const Users: any;
+  export const Zap: any;
+  export const Award: any;
+  export const CheckCircle: any;
+  export const MessageSquare: any;
+  export const TrendingUp: any;
+  export const Download: any;
+  export const Menu: any;
+  export const X: any;
+  export const ChevronRight: any;
+  export const Star: any;
+  export const FileText: any;
+  export const Clock: any;
+  export const Search: any;
+  export const Filter: any;
+  export const Eye: any;
+  export const Trash2: any;
+  export const MoreVertical: any;
+  export const Bell: any;
+  export const Settings: any;
+  export const Activity: any;
+  export const AlertCircle: any;
+  export const BarChart3: any;
+  export const PieChart: any;
+  export const Upload: any;
+  export const Brain: any;
+  export const Sparkles: any;
+  export const Target: any;
+  export const Briefcase: any;
+  export const GraduationCap: any;
+  export const Code: any;
+  export const Lightbulb: any;
+  export const ArrowRight: any;
+  export const Send: any;
+  export const User: any;
+  export const Cpu: any;
+  export const Heart: any;
+  export const Home: any;
+}
+
