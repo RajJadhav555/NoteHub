@@ -200,8 +200,13 @@ export function CollaborationPage({ userProfile }) {
   // Socket init
   useEffect(() => {
     // @ts-ignore
-    socketRef.current = io(API_BASE_URL.replace('/api', ''), {
-        query: { userId: userProfile?.id, userName: userProfile?.name }
+    const SOCKET_URL = window.location.hostname.includes('vercel.app') 
+        ? 'https://rajdjadhav-notehub-backend.hf.space'
+        : API_BASE_URL.replace('/api', '');
+
+    socketRef.current = io(SOCKET_URL, {
+        query: { userId: userProfile?.id, userName: userProfile?.name },
+        transports: ['websocket', 'polling']
     });
 
     socketRef.current.on("connect", () => {
@@ -1072,8 +1077,8 @@ export function CollaborationPage({ userProfile }) {
                         </button>
                     )}
                     {/* The call buttons here could initiate room calls, but for now we only support 1-1 via specific users. Let's just mock a group call initiator for UI completeness */}
-                    <button className="p-2 text-stone-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-full transition" title="Start Audio Study"><Phone className="w-5 h-5"/></button>
-                    <button className="p-2 text-stone-400 hover:text-pink-500 hover:bg-pink-50 dark:hover:bg-pink-900/20 rounded-full transition" title="Start Video Study"><Video className="w-5 h-5"/></button>
+                    <button onClick={() => alert("Group calling is coming soon!\\n\\nTo start a 1-on-1 call, click the phone/video icons next to a student in the 'Online Students' list on the left.")} className="p-2 text-stone-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-full transition" title="Start Audio Study"><Phone className="w-5 h-5"/></button>
+                    <button onClick={() => alert("Group video calling is coming soon!\\n\\nTo start a 1-on-1 video call, click the phone/video icons next to a student in the 'Online Students' list on the left.")} className="p-2 text-stone-400 hover:text-pink-500 hover:bg-pink-50 dark:hover:bg-pink-900/20 rounded-full transition" title="Start Video Study"><Video className="w-5 h-5"/></button>
                 </div>
              </div>
 
