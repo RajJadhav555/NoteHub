@@ -671,7 +671,7 @@ export function CollaborationPage({ userProfile }) {
       });
       
       if (!res.ok) {
-        let errData = {};
+        let errData: any = {};
         try { errData = await res.json(); } catch (e) {}
         throw new Error(errData.error || 'Failed to create group');
       }
