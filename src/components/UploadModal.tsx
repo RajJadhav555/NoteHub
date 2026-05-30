@@ -485,12 +485,12 @@ export function UploadModal({ isOpen, onClose, onUploadComplete, userProfile }) 
         if (!response.ok) {
             let errorText = "Upload failed";
             let plagiarismData = null;
+            const text = await response.text();
             try {
-                const errData = await response.json();
+                const errData = JSON.parse(text);
                 errorText = errData.error || errData.message || "Upload failed";
                 if (errData.plagiarism) plagiarismData = errData.plagiarism;
             } catch (e) {
-                const text = await response.text();
                 if (text) errorText = text;
             }
             if (plagiarismData) setPlagReport(plagiarismData);
