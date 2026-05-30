@@ -53,7 +53,8 @@ export function NotesAIChatModal({ onClose }) {
         headers,
         body: JSON.stringify({ message: userMsg }),
       });
-      const data = await response.json(); if (!response.ok) throw new Error(data.error || "Failed to process request");
+      const data = await response.json(); 
+      if (!response.ok) throw new Error(data.error || data.reply || "Failed to process request");
 
       setMessages((prev) => [
         ...prev,
