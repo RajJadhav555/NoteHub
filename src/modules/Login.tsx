@@ -29,7 +29,7 @@ export function LoginPage({ onLoginSuccess }) {
       onLoginSuccess(data);
     } catch (err) {
       console.error("Login error:", err);
-      setError("Google Login failed. Please try again.");
+      setError(err.message || "Google Login failed. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -62,7 +62,7 @@ export function LoginPage({ onLoginSuccess }) {
       onLoginSuccess(data);
     } catch (err) {
       console.error("Auth error:", err);
-      setError(isSignup ? "Signup failed. Try a different email." : "Invalid email or password");
+      setError(err.message || (isSignup ? "Signup failed. Try a different email." : "Invalid email or password"));
     } finally {
       setIsLoading(false);
     }

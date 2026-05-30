@@ -1,5 +1,5 @@
 // API Configuration
-const API_BASE_URL = (import.meta.env && import.meta.env.VITE_API_URL) || '/api';
+const API_BASE_URL = (import.meta.env && import.meta.env.VITE_API_URL) || 'https://rajdjadhav-notehub-backend.hf.space/api';
 
 // Auth header helper — reads JWT from sessionStorage (where App.tsx stores it)
 const getAuthHeaders = (includeContentType = true) => {
@@ -260,7 +260,12 @@ export const usersAPI = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token })
       });
-      if (!response.ok) throw new Error('Google login failed');
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        let errData = {};
+        try { errData = JSON.parse(text); } catch (e) {}
+        throw new Error(errData.error || `Google login failed. Status: ${response.status}. Body: ${text.substring(0,100)}`);
+      }
       const data = await response.json();
       // Store JWT for subsequent requests (matching App.tsx sessionStorage key)
       if (data.token) sessionStorage.setItem('notehub_token', data.token);

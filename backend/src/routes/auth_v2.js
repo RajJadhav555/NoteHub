@@ -221,6 +221,7 @@ router.post('/google', validate(googleAuthSchema), async (req, res) => {
 
   } catch (error) {
     console.error('Auth error:', error);
+    require('fs').appendFileSync('auth_debug.log', new Date().toISOString() + ' Auth error: ' + error.stack + '\n');
     res.status(500).json({ error: 'Auth failed: ' + error.message });
   }
 });
