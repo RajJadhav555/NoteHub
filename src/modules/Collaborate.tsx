@@ -669,25 +669,30 @@ export function CollaborationPage({ userProfile }) {
           creatorId: userProfile?.id || 0,
         }),
       });
-      if (res.ok) {
-        const created = await res.json();
-        // Send invites to selected students immediately
-        if (selectedInvites.length > 0 && created.id) {
-          await fetch(`${API_BASE_URL}/collaboration/groups/${created.id}/invite`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ requesterId: userProfile?.id || 0, userIds: selectedInvites }),
-          });
-        }
-        setShowCreateGroupModal(false);
-        setNewGroupName("");
-        setNewGroupSubject("");
-        setSelectedInvites([]);
-        setStudentSearch("");
-        loadStudyGroups();
+      
+      if (!res.ok) {
+        let errData = {};
+        try { errData = await res.json(); } catch (e) {}
+        throw new Error(errData.error || 'Failed to create group');
       }
-    } catch (e) {
-      alert("Failed to create group. Please try again.");
+
+      const created = await res.json();
+      // Send invites to selected students immediately
+      if (selectedInvites.length > 0 && created.id) {
+        await fetch(`${API_BASE_URL}/collaboration/groups/${created.id}/invite`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ requesterId: userProfile?.id || 0, userIds: selectedInvites }),
+        });
+      }
+      setShowCreateGroupModal(false);
+      setNewGroupName("");
+      setNewGroupSubject("");
+      setSelectedInvites([]);
+      setStudentSearch("");
+      loadStudyGroups();
+    } catch (e: any) {
+      alert(e.message || "Failed to create group. Please try again.");
     }
   };
 

@@ -15,6 +15,7 @@
     "lucide-react": "^0.564.0",
     "pdfjs-dist": "^5.4.624",
     "process": "^0.11.10",
+    "puppeteer": "^25.1.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-markdown": "^10.1.0",
