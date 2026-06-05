@@ -432,21 +432,7 @@ export function CollaborationPage({ userProfile }) {
         console.log("💔 Received focus_link_broken:", data, "Current activeChannelRef:", activeChannelRef.current);
         if (data.room === activeChannelRef.current) {
             setActiveFocusUsers((prev) => prev.filter(u => u !== data.user));
-            
-            // Add system message
-            setChannelMessages((prev) => [...prev, {
-                id: Date.now(),
-                user: "System",
-                message: `⚠️ ${data.user}'s focus link was broken (${data.reason}).`,
-                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                avatar: "🤖",
-                type: 'text'
-            }]);
-
-            if (data.user === userProfile?.name) {
-                setIsFocusLinked(false);
-                setFocusStartTime(null);
-            }
+            // Message alert is now handled by the 'receive_message' listener
         }
     });
 
@@ -587,15 +573,29 @@ export function CollaborationPage({ userProfile }) {
             setPomodoro({ isRunning: true, timeLeft: data.timeLeft, duration: data.duration, phase: 'study' });
             setIsFocusLinked(true);
             setFocusStartTime(Date.now());
-            // Optionally add system message for Pomodoro + Focus Link start
-            setChannelMessages((prev) => [...prev, {
-                id: Date.now(),
-                user: "System",
-                message: `🎯 ${data.startedBy || 'Someone'} started a ${data.duration / 60}m Focused Study Session! Stay on this tab to maintain your Focus Link.`,
-                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                avatar: "🤖",
-                type: 'text'
-            }]);
+            
+            // Only the person who started it sends the system message to avoid spam
+            if (data.startedBy === userProfile?.name) {
+                const sysMsg = {
+                    id: Date.now(),
+                    user: "System",
+                    message: `🎯 ${data.startedBy || 'Someone'} started a ${data.duration / 60}m Focused Study Session! Stay on this tab to maintain your Focus Link.`,
+                    time: new Date().toISOString(),
+                    avatar: "🤖",
+                    room: activeChannelRef.current
+                };
+                socketRef.current.emit("send_message", sysMsg);
+                fetch(`${API_BASE_URL}/messages/send`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        userId: 0,
+                        userName: "System",
+                        message: sysMsg.message,
+                        groupName: activeChannelRef.current
+                    })
+                }).catch(err => console.error("Failed to save system message", err));
+            }
         }
     });
 
@@ -604,11 +604,12 @@ export function CollaborationPage({ userProfile }) {
             setPomodoro({ isRunning: data.isRunning, timeLeft: data.timeLeft, duration: data.duration, phase: data.phase });
             if (data.phase === 'break' && isFocusLinkedRef.current) {
                  setIsFocusLinked(false);
+                 // Client locally shows break message so we don't spam DB 10 times
                  setChannelMessages((prev) => [...prev, {
                     id: Date.now(),
                     user: "System",
                     message: `☕ Break time! Focus Link paused. Feel free to switch tabs.`,
-                    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    time: new Date().toISOString(),
                     avatar: "🤖",
                     type: 'text'
                  }]);
@@ -669,11 +670,41 @@ export function CollaborationPage({ userProfile }) {
   const breakFocusLink = (reason: string) => {
       console.log("⏹️ breakFocusLink called:", reason, "Room:", activeChannelRef.current);
       if (!activeChannelRef.current || !isFocusLinkedRef.current) return;
-      socketRef.current.emit("break_focus_link", {
+      
+      // Immediately set false to prevent double-firing
+      setIsFocusLinked(false);
+      isFocusLinkedRef.current = false;
+      setFocusStartTime(null);
+
+      // Tell the server
+      socketRef.current?.emit("break_focus_link", {
           room: activeChannelRef.current,
           user: userProfile?.name || "Anonymous",
           reason
       });
+
+      // Send the system message as a real chat message
+      const sysMsg = {
+          id: Date.now(),
+          user: "System",
+          message: `⚠️ ${userProfile?.name || "Anonymous"}'s focus link was broken (${reason}).`,
+          time: new Date().toISOString(),
+          avatar: "🤖",
+          room: activeChannelRef.current
+      };
+      socketRef.current?.emit("send_message", sysMsg);
+      
+      // Save it permanently
+      fetch(`${API_BASE_URL}/messages/send`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+              userId: 0,
+              userName: "System",
+              message: sysMsg.message,
+              groupName: activeChannelRef.current
+          })
+      }).catch(err => console.error("Failed to save system message", err));
   };
 
   // Tab Abort / Focus Breaking Logic
