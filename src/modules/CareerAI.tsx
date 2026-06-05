@@ -240,9 +240,25 @@ export function CareerGuidance({ userProfile }) {
       const pdf = new jsPDF('p', 'mm', 'a4');
       const imgProps = pdf.getImageProperties(imgData);
       const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
       const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
       
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      let heightLeft = pdfHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        // position needs to shift up by the pageHeight for each new page
+        // Since position starts at 0, next page it should be -pageHeight, then -2*pageHeight etc.
+        // But the while loop logic conventionally uses:
+        position -= pageHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+        heightLeft -= pageHeight;
+      }
+      
       pdf.save(`NoteHub_${selectedCareer.title}_Roadmap.pdf`);
     } catch (error) {
       console.error("PDF Generation Error:", error);
