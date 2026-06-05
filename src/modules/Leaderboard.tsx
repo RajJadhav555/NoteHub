@@ -4,6 +4,13 @@ import { ScanModal } from "./ScanModal";
 import { io } from "socket.io-client";
 import { leaderboardAPI, API_BASE_URL } from "../services/api";
 
+const getRankRingStyle = (index) => {
+  if (index === 0) return "border-2 border-yellow-400 text-yellow-600 bg-yellow-50 dark:bg-yellow-900/30 dark:text-yellow-400";
+  if (index === 1) return "border-2 border-slate-400 text-slate-600 bg-slate-50 dark:bg-slate-800 dark:text-slate-300";
+  if (index === 2) return "border-2 border-amber-600 text-amber-700 bg-amber-50 dark:bg-amber-900/30 dark:text-amber-500";
+  return "border-2 border-purple-500 text-purple-600 bg-purple-50 dark:bg-purple-900/30 dark:text-purple-400";
+};
+
 export function GamificationPage({ leaderboard: initialLeaderboard, userProfile, onAddNote }) {
   const [showScanModal, setShowScanModal] = useState(false);
   const fileInputRef = useRef(null);
@@ -257,11 +264,7 @@ export function GamificationPage({ leaderboard: initialLeaderboard, userProfile,
                   >
                       <div className="flex items-center space-x-4">
                         <div
-                          className={`w-8 h-8 rounded text-sm font-bold flex items-center justify-center ${
-                            user.department === departmentWar.winningDepartment && departmentWar.winningDepartment
-                              ? "flare-glow text-white"
-                              : index < 3 ? "bg-stone-900 text-white dark:bg-white dark:text-stone-900" : "bg-stone-100 text-stone-500"
-                          }`}
+                          className={`w-8 h-8 rounded-full text-sm font-bold flex items-center justify-center shrink-0 ${getRankRingStyle(index)}`}
                         >
                           {user.rank}
                         </div>
