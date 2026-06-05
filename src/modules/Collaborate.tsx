@@ -4,7 +4,7 @@ console.log("Collaborate.tsx is loading...");
 import { 
   Video, Users, MessageSquare, File, Paperclip, Send, X, 
   CircleHelp as HelpCircle, Mic, MicOff, VideoOff, PhoneOff, 
-  Plus, Search, Phone, Settings
+  Plus, Search, Phone, Settings, Maximize2
 } from "lucide-react/dist/esm/lucide-react";
 import { Buffer } from 'buffer';
 
@@ -119,6 +119,7 @@ export function CollaborationPage({ userProfile }) {
   const [newMessage, setNewMessage] = useState("");
   const [activeChannel, setActiveChannel] = useState("");
   const [activeGroupCall, setActiveGroupCall] = useState<boolean>(false);
+  const [isFullScreenCall, setIsFullScreenCall] = useState<boolean>(false);
   const [studyGroups, setStudyGroups] = useState<StudyGroup[]>([]);
   const [channelMessages, setChannelMessages] = useState<Message[]>([]);
   
@@ -1085,16 +1086,22 @@ export function CollaborationPage({ userProfile }) {
 
              {/* Group Call Interface Overlay (Jitsi) */}
              {activeGroupCall && activeGroup && (
-                 <div className="bg-stone-900 border-b border-stone-800 flex gap-0 shrink-0 shadow-xl overflow-hidden animate-fade-in z-10 transition-all h-[400px] relative">
+                 <div className={`bg-stone-900 border-b border-stone-800 flex gap-0 shrink-0 shadow-xl overflow-hidden animate-fade-in transition-all relative ${isFullScreenCall ? 'fixed inset-0 z-[100] w-full h-full' : 'z-10 h-[400px]'}`}>
                      <div className="absolute top-2 left-2 px-2 py-1 bg-black/60 text-white text-xs rounded uppercase tracking-wider z-20 font-bold backdrop-blur-sm shadow flex items-center gap-2">
                         <span className="animate-pulse w-2 h-2 bg-red-500 rounded-full" />
                         Live Group Session
                      </div>
-                     <button onClick={() => setActiveGroupCall(false)} className="absolute top-2 right-2 z-20 p-2 bg-black/60 text-white hover:bg-red-500 rounded transition backdrop-blur-sm shadow" title="Leave Call">
-                        <X className="w-4 h-4"/>
-                     </button>
+                     <div className="absolute top-2 right-2 z-20 flex items-center gap-2">
+                         <button onClick={() => setIsFullScreenCall(!isFullScreenCall)} className="p-2 bg-black/60 text-white hover:bg-stone-700 rounded transition backdrop-blur-sm shadow" title={isFullScreenCall ? "Exit Fullscreen" : "Fullscreen"}>
+                            <Maximize2 className="w-4 h-4"/>
+                         </button>
+                         <button onClick={() => { setActiveGroupCall(false); setIsFullScreenCall(false); }} className="p-2 bg-black/60 text-white hover:bg-red-500 rounded transition backdrop-blur-sm shadow" title="Leave Call">
+                            <X className="w-4 h-4"/>
+                         </button>
+                     </div>
                      <iframe 
-                        allow="camera; microphone; display-capture; autoplay; clipboard-write"
+                        allow="camera; microphone; fullscreen; display-capture; autoplay; clipboard-write"
+                        allowFullScreen
                         src={`https://meet.jit.si/NoteHub-Group-${activeGroup.id}#config.prejoinPageEnabled=false&userInfo.displayName="${encodeURIComponent(userProfile?.name || 'Student')}"`}
                         className="w-full h-full border-0"
                      />
