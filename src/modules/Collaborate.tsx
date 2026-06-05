@@ -1348,8 +1348,22 @@ export function CollaborationPage({ userProfile }) {
                                         <div className={`text-sm font-medium truncate max-w-[90px] ${isOnline ? 'text-stone-700 dark:text-stone-300' : 'text-stone-400 dark:text-stone-500'}`}>{m.name}</div>
                                     </div>
                                     <div className="flex gap-1 shrink-0">
-                                        <button onClick={toggleVoiceCall} title="Audio Call" className="p-1.5 text-emerald-500 hover:text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-lg transition"><Phone className="w-3.5 h-3.5"/></button>
-                                        <button onClick={toggleVideoCall} title="Video Call" className="p-1.5 text-pink-500 hover:text-pink-600 bg-pink-50 dark:bg-pink-900/20 hover:bg-pink-100 dark:hover:bg-pink-900/40 rounded-lg transition"><Video className="w-3.5 h-3.5"/></button>
+                                        <button 
+                                            onClick={toggleVoiceCall} 
+                                            disabled={!isOnline} 
+                                            title={isOnline ? "Audio Call" : "Offline"} 
+                                            className={`p-1.5 rounded-lg transition ${isOnline ? 'text-emerald-500 hover:text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/40' : 'text-stone-400 dark:text-stone-600 bg-stone-50 dark:bg-stone-900/10 cursor-not-allowed opacity-50'}`}
+                                        >
+                                            <Phone className="w-3.5 h-3.5"/>
+                                        </button>
+                                        <button 
+                                            onClick={toggleVideoCall} 
+                                            disabled={!isOnline} 
+                                            title={isOnline ? "Video Call" : "Offline"} 
+                                            className={`p-1.5 rounded-lg transition ${isOnline ? 'text-pink-500 hover:text-pink-600 bg-pink-50 dark:bg-pink-900/20 hover:bg-pink-100 dark:hover:bg-pink-900/40' : 'text-stone-400 dark:text-stone-600 bg-stone-50 dark:bg-stone-900/10 cursor-not-allowed opacity-50'}`}
+                                        >
+                                            <Video className="w-3.5 h-3.5"/>
+                                        </button>
                                     </div>
                                 </div>
                               );
