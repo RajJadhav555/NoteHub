@@ -118,7 +118,7 @@ export function CollaborationPage({ userProfile }) {
   console.log("CollaborationPage rendering...", userProfile);
   const [newMessage, setNewMessage] = useState("");
   const [activeChannel, setActiveChannel] = useState("");
-  const [activeGroupCall, setActiveGroupCall] = useState<boolean>(false);
+  const [activeGroupCall, setActiveGroupCall] = useState<string | null>(null);
   const [isFullScreenCall, setIsFullScreenCall] = useState<boolean>(false);
   const [studyGroups, setStudyGroups] = useState<StudyGroup[]>([]);
   const [channelMessages, setChannelMessages] = useState<Message[]>([]);
@@ -1079,8 +1079,8 @@ export function CollaborationPage({ userProfile }) {
                         </button>
                     )}
                     {/* Group Video Calling via Jitsi Meet */}
-                    <button onClick={() => setActiveGroupCall(!activeGroupCall)} className={`p-2 rounded-full transition ${activeGroupCall ? 'text-emerald-500 bg-emerald-50 dark:bg-emerald-900/30' : 'text-stone-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20'}`} title="Toggle Group Call"><Phone className="w-5 h-5"/></button>
-                    <button onClick={() => setActiveGroupCall(!activeGroupCall)} className={`p-2 rounded-full transition ${activeGroupCall ? 'text-pink-500 bg-pink-50 dark:bg-pink-900/30' : 'text-stone-400 hover:text-pink-500 hover:bg-pink-50 dark:hover:bg-pink-900/20'}`} title="Toggle Group Video Call"><Video className="w-5 h-5"/></button>
+                    <button onClick={() => setActiveGroupCall(activeGroupCall === 'audio' ? null : 'audio')} className={`p-2 rounded-full transition ${activeGroupCall === 'audio' ? 'text-emerald-500 bg-emerald-50 dark:bg-emerald-900/30' : 'text-stone-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20'}`} title="Toggle Group Audio Call"><Phone className="w-5 h-5"/></button>
+                    <button onClick={() => setActiveGroupCall(activeGroupCall === 'video' ? null : 'video')} className={`p-2 rounded-full transition ${activeGroupCall === 'video' ? 'text-pink-500 bg-pink-50 dark:bg-pink-900/30' : 'text-stone-400 hover:text-pink-500 hover:bg-pink-50 dark:hover:bg-pink-900/20'}`} title="Toggle Group Video Call"><Video className="w-5 h-5"/></button>
                 </div>
              </div>
 
@@ -1095,14 +1095,14 @@ export function CollaborationPage({ userProfile }) {
                          <button onClick={() => setIsFullScreenCall(!isFullScreenCall)} className="p-2 bg-black/60 text-white hover:bg-stone-700 rounded transition backdrop-blur-sm shadow" title={isFullScreenCall ? "Exit Fullscreen" : "Fullscreen"}>
                             <Maximize2 className="w-4 h-4"/>
                          </button>
-                         <button onClick={() => { setActiveGroupCall(false); setIsFullScreenCall(false); }} className="p-2 bg-black/60 text-white hover:bg-red-500 rounded transition backdrop-blur-sm shadow" title="Leave Call">
+                         <button onClick={() => { setActiveGroupCall(null); setIsFullScreenCall(false); }} className="p-2 bg-black/60 text-white hover:bg-red-500 rounded transition backdrop-blur-sm shadow" title="Leave Call">
                             <X className="w-4 h-4"/>
                          </button>
                      </div>
                      <iframe 
                         allow="camera; microphone; fullscreen; display-capture; autoplay; clipboard-write"
                         allowFullScreen
-                        src={`https://meet.jit.si/NoteHub-Group-${activeGroup.id}#config.prejoinPageEnabled=false&userInfo.displayName="${encodeURIComponent(userProfile?.name || 'Student')}"`}
+                        src={`https://meet.jit.si/NoteHub-Group-${activeGroup.id}#config.prejoinPageEnabled=false&userInfo.displayName="${encodeURIComponent(userProfile?.name || 'Student')}"${activeGroupCall === 'audio' ? '&config.startAudioOnly=true&config.startWithVideoMuted=true' : ''}`}
                         className="w-full h-full border-0"
                      />
                  </div>
@@ -1447,16 +1447,21 @@ export function CollaborationPage({ userProfile }) {
                       <span className="bg-stone-100 dark:bg-stone-800 px-2 py-0.5 rounded text-xs">{groupMembers.length}</span>
                   </h3>
                   <div className="max-h-[250px] overflow-y-auto space-y-2 pr-1">
-                      {groupMembers.map(member => (
+                      {groupMembers.map(member => {
+                          const isOnline = onlineUsers.some(ou => String(ou.id) === String(member.id));
+                          return (
                           <div key={member.id} className="flex items-center justify-between p-3 rounded-xl bg-stone-50 dark:bg-stone-800/50 border border-stone-100 dark:border-stone-800">
                               <div className="flex items-center gap-3">
-                                  <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/40 font-bold flex items-center justify-center text-indigo-700 dark:text-indigo-400 text-xs">
-                                      {member.name[0]}
+                                  <div className="relative">
+                                      <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/40 font-bold flex items-center justify-center text-indigo-700 dark:text-indigo-400 text-xs">
+                                          {member.name[0]}
+                                      </div>
+                                      {isOnline && <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-stone-50 dark:border-stone-800 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse" title="Online" />}
                                   </div>
                                   <div>
-                                      <div className="text-sm font-bold text-stone-900 dark:text-white leading-tight">
+                                      <div className="text-sm font-bold text-stone-900 dark:text-white leading-tight flex items-center gap-1.5">
                                           {member.name} 
-                                          {member.id === activeGroup.creator_id && <span className="ml-2 text-[10px] uppercase font-bold text-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 px-1.5 py-0.5 rounded">Admin</span>}
+                                          {member.id === activeGroup.creator_id && <span className="text-[10px] uppercase font-bold text-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 px-1.5 py-0.5 rounded">Admin</span>}
                                       </div>
                                       <div className="text-[10px] text-stone-500 truncate max-w-[150px]">{member.email}</div>
                                   </div>
@@ -1467,7 +1472,8 @@ export function CollaborationPage({ userProfile }) {
                                   </button>
                               )}
                           </div>
-                      ))}
+                          );
+                      })}
                   </div>
               </div>
               
