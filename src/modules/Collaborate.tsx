@@ -149,6 +149,9 @@ export function CollaborationPage({ userProfile }) {
   const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   
+  // Active call banner state
+  const [activeCallBanner, setActiveCallBanner] = useState<{ participants: { userName: string, userId: string }[], groupId: number, groupName: string } | null>(null);
+  
   // Call state
   const [incomingCall, setIncomingCall] = useState<any>(null);
   const [callerName, setCallerName] = useState("");
@@ -320,7 +323,18 @@ export function CollaborationPage({ userProfile }) {
         handleEndCall();
     });
 
-    // Removed transient group_voice_started listener. It's now handled as a persistent message.
+    // Listen for active call banner broadcasts
+    socketRef.current.on("group_call_active", (data) => {
+        if (data.groupName === activeChannelRef.current) {
+            setActiveCallBanner(data);
+        }
+    });
+
+    socketRef.current.on("group_call_ended", (data) => {
+        if (data.groupName === activeChannelRef.current) {
+            setActiveCallBanner(null);
+        }
+    });
 
     // --- Group WebRTC Voice Mesh Listeners ---
     socketRef.current.on("group_voice_user_joined", (data) => {
@@ -329,7 +343,14 @@ export function CollaborationPage({ userProfile }) {
             const peer = new SimplePeer({
                 initiator: true,
                 trickle: false,
-                stream: localStreamRef.current
+                stream: localStreamRef.current,
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun2.l.google.com:19302' },
+                    ]
+                }
             });
 
             peer.on("signal", signal => {
@@ -361,7 +382,14 @@ export function CollaborationPage({ userProfile }) {
                 peer = new SimplePeer({
                     initiator: false,
                     trickle: false,
-                    stream: localStreamRef.current
+                    stream: localStreamRef.current,
+                    config: {
+                        iceServers: [
+                            { urls: 'stun:stun.l.google.com:19302' },
+                            { urls: 'stun:stun1.l.google.com:19302' },
+                            { urls: 'stun:stun2.l.google.com:19302' },
+                        ]
+                    }
                 });
 
                 peer.on("signal", signal => {
@@ -535,7 +563,7 @@ export function CollaborationPage({ userProfile }) {
           
           if (activeChannel) {
               const activeGroup = studyGroups.find(g => g.name === activeChannel);
-              if (activeGroup) socketRef.current.emit("leave_group_voice", { groupId: activeGroup.id });
+              if (activeGroup) socketRef.current.emit("leave_group_voice", { groupId: activeGroup.id, groupName: activeGroup.name });
           }
       } else {
           // Join call
@@ -715,6 +743,13 @@ export function CollaborationPage({ userProfile }) {
           initiator: true,
           trickle: false,
           stream: currentStream,
+          config: {
+              iceServers: [
+                  { urls: 'stun:stun.l.google.com:19302' },
+                  { urls: 'stun:stun1.l.google.com:19302' },
+                  { urls: 'stun:stun2.l.google.com:19302' },
+              ]
+          }
       });
 
       peer.on("signal", (data) => {
@@ -751,6 +786,13 @@ export function CollaborationPage({ userProfile }) {
           initiator: false,
           trickle: false,
           stream: currentStream,
+          config: {
+              iceServers: [
+                  { urls: 'stun:stun.l.google.com:19302' },
+                  { urls: 'stun:stun1.l.google.com:19302' },
+                  { urls: 'stun:stun2.l.google.com:19302' },
+              ]
+          }
       });
 
       peer.on("signal", (data) => {
@@ -986,6 +1028,20 @@ export function CollaborationPage({ userProfile }) {
     }
   }, [showGroupAdminModal, activeGroup]);
 
+  // Load group members whenever the active channel changes (for sidebar)
+  useEffect(() => {
+    if (activeGroup) {
+      loadGroupMembers(activeGroup.id);
+      // Check if there's an active call in this group
+      if (socketRef.current) {
+        socketRef.current.emit("check_active_call", { groupId: activeGroup.id, groupName: activeGroup.name });
+      }
+    } else {
+      setGroupMembers([]);
+      setActiveCallBanner(null);
+    }
+  }, [activeChannel]);
+
   const toggleInviteSelect = (uid: number) => {
     setSelectedInvites(prev => prev.includes(uid) ? prev.filter(id => id !== uid) : [...prev, uid]);
   };
@@ -1196,26 +1252,66 @@ export function CollaborationPage({ userProfile }) {
                           </div>
                       ))}
                       
-                      {/* Active Online Users specifically for 1-1 calls */}
-                      <div className="text-xs font-bold text-stone-400 dark:text-stone-500 uppercase tracking-wider mt-6 mb-2 px-2 flex justify-between">
-                          <span>Online Students</span>
-                          <span className="bg-green-100 dark:bg-green-900/30 text-green-700 px-1.5 py-0.5 rounded text-[10px]">{onlineCount}</span>
-                      </div>
-                      {onlineUsers.filter(u => u.name.toLowerCase().includes(searchTerm.toLowerCase()) && u.id !== userProfile?.id).map(u => (
-                          <div key={u.id} className="flex justify-between items-center px-3 py-2 hover:bg-stone-50 dark:hover:bg-stone-800/50 rounded-xl transition">
-                              <div className="flex items-center gap-2 min-w-0">
-                                  <div className="relative shrink-0">
-                                      <div className="w-8 h-8 rounded-full bg-stone-200 dark:bg-stone-700 flex items-center justify-center text-xs font-bold text-stone-600 dark:text-stone-300">{u.name[0]}</div>
-                                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border border-white dark:border-stone-900 rounded-full"></span>
-                                  </div>
-                                  <div className="text-sm font-medium text-stone-700 dark:text-stone-300 truncate max-w-[90px]">{u.name}</div>
-                              </div>
-                              <div className="flex gap-1 shrink-0">
-                                  <button onClick={() => initiateCall(u.id, true)} title="Audio Call" className="p-1.5 text-emerald-500 hover:text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-lg transition"><Phone className="w-3.5 h-3.5"/></button>
-                                  <button onClick={() => initiateCall(u.id, false)} title="Video Call" className="p-1.5 text-pink-500 hover:text-pink-600 bg-pink-50 dark:bg-pink-900/20 hover:bg-pink-100 dark:hover:bg-pink-900/40 rounded-lg transition"><Video className="w-3.5 h-3.5"/></button>
-                              </div>
+                      {/* Group Members (when a group is selected) or Online Students */}
+                      {activeGroup ? (
+                        <>
+                          <div className="text-xs font-bold text-stone-400 dark:text-stone-500 uppercase tracking-wider mt-6 mb-2 px-2 flex justify-between">
+                              <span>Group Members</span>
+                              <span className="bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 px-1.5 py-0.5 rounded text-[10px]">{groupMembers.length}</span>
                           </div>
-                      ))}
+                          {/* Sort: online first, then offline */}
+                          {[...groupMembers]
+                            .filter(m => m.name?.toLowerCase().includes(searchTerm.toLowerCase()) && m.id !== userProfile?.id)
+                            .sort((a, b) => {
+                              const aOnline = onlineUsers.some(o => o.id === a.id);
+                              const bOnline = onlineUsers.some(o => o.id === b.id);
+                              if (aOnline && !bOnline) return -1;
+                              if (!aOnline && bOnline) return 1;
+                              return 0;
+                            })
+                            .map(m => {
+                              const isOnline = onlineUsers.some(o => o.id === m.id);
+                              return (
+                                <div key={m.id} className="flex justify-between items-center px-3 py-2 hover:bg-stone-50 dark:hover:bg-stone-800/50 rounded-xl transition">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <div className="relative shrink-0">
+                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${isOnline ? 'bg-stone-200 dark:bg-stone-700 text-stone-600 dark:text-stone-300' : 'bg-stone-100 dark:bg-stone-800 text-stone-400 dark:text-stone-500'}`}>{m.name?.[0]}</div>
+                                            <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 border border-white dark:border-stone-900 rounded-full ${isOnline ? 'bg-green-500' : 'bg-stone-300 dark:bg-stone-600'}`}></span>
+                                        </div>
+                                        <div className={`text-sm font-medium truncate max-w-[90px] ${isOnline ? 'text-stone-700 dark:text-stone-300' : 'text-stone-400 dark:text-stone-500'}`}>{m.name}</div>
+                                    </div>
+                                    <div className="flex gap-1 shrink-0">
+                                        <button onClick={toggleVoiceCall} title="Audio Call" className="p-1.5 text-emerald-500 hover:text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-lg transition"><Phone className="w-3.5 h-3.5"/></button>
+                                        <button onClick={toggleVideoCall} title="Video Call" className="p-1.5 text-pink-500 hover:text-pink-600 bg-pink-50 dark:bg-pink-900/20 hover:bg-pink-100 dark:hover:bg-pink-900/40 rounded-lg transition"><Video className="w-3.5 h-3.5"/></button>
+                                    </div>
+                                </div>
+                              );
+                            })
+                          }
+                        </>
+                      ) : (
+                        <>
+                          <div className="text-xs font-bold text-stone-400 dark:text-stone-500 uppercase tracking-wider mt-6 mb-2 px-2 flex justify-between">
+                              <span>Online Students</span>
+                              <span className="bg-green-100 dark:bg-green-900/30 text-green-700 px-1.5 py-0.5 rounded text-[10px]">{onlineCount}</span>
+                          </div>
+                          {onlineUsers.filter(u => u.name.toLowerCase().includes(searchTerm.toLowerCase()) && u.id !== userProfile?.id).map(u => (
+                              <div key={u.id} className="flex justify-between items-center px-3 py-2 hover:bg-stone-50 dark:hover:bg-stone-800/50 rounded-xl transition">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                      <div className="relative shrink-0">
+                                          <div className="w-8 h-8 rounded-full bg-stone-200 dark:bg-stone-700 flex items-center justify-center text-xs font-bold text-stone-600 dark:text-stone-300">{u.name[0]}</div>
+                                          <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border border-white dark:border-stone-900 rounded-full"></span>
+                                      </div>
+                                      <div className="text-sm font-medium text-stone-700 dark:text-stone-300 truncate max-w-[90px]">{u.name}</div>
+                                  </div>
+                                  <div className="flex gap-1 shrink-0">
+                                      <button onClick={() => initiateCall(u.id, true)} title="Audio Call" className="p-1.5 text-emerald-500 hover:text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-lg transition"><Phone className="w-3.5 h-3.5"/></button>
+                                      <button onClick={() => initiateCall(u.id, false)} title="Video Call" className="p-1.5 text-pink-500 hover:text-pink-600 bg-pink-50 dark:bg-pink-900/20 hover:bg-pink-100 dark:hover:bg-pink-900/40 rounded-lg transition"><Video className="w-3.5 h-3.5"/></button>
+                                  </div>
+                              </div>
+                          ))}
+                        </>
+                      )}
                   </div>
               </div>
 
@@ -1283,6 +1379,33 @@ export function CollaborationPage({ userProfile }) {
                     <button onClick={toggleVideoCall} className={`p-2 rounded-full transition ${activeGroupCall === 'video' ? 'text-pink-500 bg-pink-50 dark:bg-pink-900/30' : 'text-stone-400 hover:text-pink-500 hover:bg-pink-50 dark:hover:bg-pink-900/20'}`} title="Toggle Group Video Call"><Video className="w-5 h-5"/></button>
                 </div>
              </div>
+
+             {/* Live Call Join Banner (shown when someone else started a call and you haven't joined) */}
+             {activeCallBanner && activeGroupCall !== 'audio' && activeGroup && (
+                 <div className="bg-gradient-to-r from-emerald-600 to-teal-600 border-b border-emerald-700 p-4 shrink-0 shadow-xl z-10 animate-fade-in">
+                     <div className="flex items-center justify-between">
+                         <div className="flex items-center gap-3">
+                             <div className="relative">
+                                 <Phone className="w-6 h-6 text-white" />
+                                 <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-ping" />
+                                 <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full" />
+                             </div>
+                             <div>
+                                 <div className="text-white font-bold text-sm">🔊 Active Voice Call</div>
+                                 <div className="text-emerald-100 text-xs">
+                                     {activeCallBanner.participants.map(p => p.userName).join(', ')} {activeCallBanner.participants.length === 1 ? 'is' : 'are'} in the call
+                                 </div>
+                             </div>
+                         </div>
+                         <button 
+                             onClick={toggleVoiceCall}
+                             className="px-5 py-2.5 bg-white text-emerald-700 font-bold text-sm rounded-xl hover:bg-emerald-50 transition shadow-lg flex items-center gap-2"
+                         >
+                             <Phone className="w-4 h-4" /> Join Now
+                         </button>
+                     </div>
+                 </div>
+             )}
 
              {/* Group Voice Call Native Interface */}
              {activeGroupCall === 'audio' && activeGroup && (
