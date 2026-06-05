@@ -241,20 +241,20 @@ export function GamificationPage({ leaderboard: initialLeaderboard, userProfile,
                       <div className="flex items-center space-x-4">
                         <div className="relative">
                           <div
-                            className={`w-8 h-8 rounded-full text-sm font-bold flex items-center justify-center shrink-0 ${getRankRingStyle(index)}`}
+                            className={`w-10 h-10 rounded-full text-sm font-bold flex items-center justify-center shrink-0 ${getRankRingStyle(index)}`}
                           >
-                            {user.rank}
+                            {index + 1}
                           </div>
                           {user.name !== userProfile.name && (
-                            <div className="absolute -bottom-1 -right-1">
+                            <div className="absolute -bottom-0.5 -right-0.5">
                               {user.is_online ? (
                                 <span className="relative flex h-3.5 w-3.5" title="Online">
-                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                  <span className="relative inline-flex rounded-full h-3.5 w-3.5 border-2 border-white dark:border-stone-900 bg-green-500"></span>
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-3.5 w-3.5 border-2 border-white dark:border-stone-900 bg-emerald-500"></span>
                                 </span>
                               ) : (
                                 <span className="relative flex h-3.5 w-3.5" title="Offline">
-                                  <span className="relative inline-flex rounded-full h-3.5 w-3.5 border-2 border-white dark:border-stone-900 bg-red-500"></span>
+                                  <span className="relative inline-flex rounded-full h-3.5 w-3.5 border-2 border-white dark:border-stone-900 bg-rose-500"></span>
                                 </span>
                               )}
                             </div>

@@ -242,11 +242,19 @@ export function CareerGuidance({ userProfile }) {
     if (!roadmapRef.current) return;
     
     try {
+      const originalOverflow = roadmapRef.current.style.overflow;
+      roadmapRef.current.style.overflow = 'visible';
+      
       const canvas = await html2canvas(roadmapRef.current, {
         scale: 2,
         useCORS: true,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
+        windowWidth: roadmapRef.current.scrollWidth,
+        windowHeight: roadmapRef.current.scrollHeight
       });
+      
+      roadmapRef.current.style.overflow = originalOverflow;
+      
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
       const imgProps = pdf.getImageProperties(imgData);
