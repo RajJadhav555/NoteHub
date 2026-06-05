@@ -119,7 +119,6 @@ interface PomodoroState {
   timeLeft: number;
   duration: number;
   phase: 'study' | 'break';
-  isStrict?: boolean;
 }
 
 const THEME_COLORS: Record<string, { primary: string; light: string; dark: string; ring: string; text: string; bg: string }> = {
@@ -241,7 +240,6 @@ export function CollaborationPage({ userProfile }) {
   // === NEW: Study Customization State ===
   const [activeTab, setActiveTab] = useState<'chat' | 'library' | 'goals' | 'meets'>('chat');
   const [pomodoro, setPomodoro] = useState<PomodoroState | null>(null);
-  const [strictMode, setStrictMode] = useState(false);
   const [libraryNotes, setLibraryNotes] = useState<LibraryNote[]>([]);
   const [groupGoals, setGroupGoals] = useState<GroupGoal[]>([]);
   const [groupMeets, setGroupMeets] = useState<GroupMeet[]>([]);
@@ -586,18 +584,34 @@ export function CollaborationPage({ userProfile }) {
     // --- Pomodoro Timer Listeners ---
     socketRef.current.on("group_pomodoro_started", (data) => {
         if (activeGroupIdRef.current && String(data.groupId) === String(activeGroupIdRef.current)) {
-            setPomodoro({ isRunning: true, timeLeft: data.timeLeft, duration: data.duration, phase: 'study', isStrict: data.isStrict });
-            if (data.isStrict && data.phase === 'study') {
-                 startFocusLink();
-            }
+            setPomodoro({ isRunning: true, timeLeft: data.timeLeft, duration: data.duration, phase: 'study' });
+            setIsFocusLinked(true);
+            setFocusStartTime(Date.now());
+            // Optionally add system message for Pomodoro + Focus Link start
+            setChannelMessages((prev) => [...prev, {
+                id: Date.now(),
+                user: "System",
+                message: `🎯 ${data.startedBy || 'Someone'} started a ${data.duration / 60}m Focused Study Session! Stay on this tab to maintain your Focus Link.`,
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                avatar: "🤖",
+                type: 'text'
+            }]);
         }
     });
 
     socketRef.current.on("group_pomodoro_tick", (data) => {
         if (activeGroupIdRef.current && String(data.groupId) === String(activeGroupIdRef.current)) {
-            setPomodoro({ isRunning: data.isRunning, timeLeft: data.timeLeft, duration: data.duration, phase: data.phase, isStrict: data.isStrict });
-            if (data.isStrict && data.phase === 'break' && isFocusLinkedRef.current) {
-                 breakFocusLink("Pomodoro break started");
+            setPomodoro({ isRunning: data.isRunning, timeLeft: data.timeLeft, duration: data.duration, phase: data.phase });
+            if (data.phase === 'break' && isFocusLinkedRef.current) {
+                 setIsFocusLinked(false);
+                 setChannelMessages((prev) => [...prev, {
+                    id: Date.now(),
+                    user: "System",
+                    message: `☕ Break time! Focus Link paused. Feel free to switch tabs.`,
+                    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    avatar: "🤖",
+                    type: 'text'
+                 }]);
             }
         }
     });
@@ -605,6 +619,7 @@ export function CollaborationPage({ userProfile }) {
     socketRef.current.on("group_pomodoro_ended", (data) => {
         if (activeGroupIdRef.current && String(data.groupId) === String(activeGroupIdRef.current)) {
             setPomodoro(null);
+            setIsFocusLinked(false);
         }
     });
 
@@ -807,8 +822,7 @@ export function CollaborationPage({ userProfile }) {
       groupId: ag.id,
       groupName: ag.name,
       duration: duration,
-      userName: userProfile?.name || 'Someone',
-      isStrict: strictMode
+      userName: userProfile?.name || 'Someone'
     });
   };
 
@@ -1809,8 +1823,7 @@ export function CollaborationPage({ userProfile }) {
                           {Math.floor(pomodoro.timeLeft / 60).toString().padStart(2, '0')}:{(pomodoro.timeLeft % 60).toString().padStart(2, '0')}
                         </span>
                         <span className="text-[10px] font-bold uppercase tracking-wide flex items-center gap-1" style={{ color: pomodoro.phase === 'study' ? activeTheme.text : '#e11d48' }}>
-                          {pomodoro.phase === 'study' ? '📚 Study' : '☕ Break'}
-                          {pomodoro.isStrict && <Lock className="w-3 h-3 text-red-500" title="Strict Mode Active" />}
+                          {pomodoro.phase === 'study' ? '📚 Study Focus' : '☕ Break'}
                         </span>
                         <button onClick={stopPomodoro} className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-full transition" title="Stop Timer">
                           <Square className="w-3.5 h-3.5 text-red-500 fill-red-500"/>
@@ -1818,17 +1831,6 @@ export function CollaborationPage({ userProfile }) {
                       </div>
                     ) : (
                       <div className="flex items-center gap-2">
-                        <label className="flex items-center gap-1.5 cursor-pointer mr-2 px-2 py-1 rounded-lg hover:bg-stone-100 dark:hover:bg-stone-800 transition border border-transparent hover:border-stone-200 dark:hover:border-stone-700">
-                           <input 
-                              type="checkbox" 
-                              checked={strictMode}
-                              onChange={(e) => setStrictMode(e.target.checked)}
-                              className="rounded text-indigo-600 focus:ring-indigo-500 bg-stone-100 border-stone-300 dark:bg-stone-800 dark:border-stone-700"
-                           />
-                           <span className="text-xs font-semibold text-stone-600 dark:text-stone-400 flex items-center gap-1">
-                               Strict Mode
-                           </span>
-                        </label>
                         {[25, 45, 60].map(d => (
                           <button key={d} onClick={() => startPomodoro(d)}
                             className="px-2 py-1 text-[11px] font-bold rounded-lg transition hover:shadow-sm"
@@ -1847,20 +1849,7 @@ export function CollaborationPage({ userProfile }) {
                         startTime={focusStartTime}
                     />
                     
-                    {activeChannel && (
-                        <button 
-                            onClick={() => isFocusLinked ? breakFocusLink("Manual disconnect") : startFocusLink()}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-bold transition-all shadow-sm ${
-                                isFocusLinked 
-                                    ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-rose-500/20' 
-                                    : 'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-rose-100 dark:hover:bg-rose-900/30 hover:text-rose-600 dark:hover:text-rose-400'
-                            }`}
-                            title={isFocusLinked ? "Break Focus Link" : "Start Focus Link"}
-                        >
-                            <Paperclip className={`w-4 h-4 ${isFocusLinked ? 'rotate-45' : ''}`} />
-                            {isFocusLinked ? 'Linked' : 'Link Focus'}
-                        </button>
-                    )}
+                    {/* Standalone Focus Link button removed as it is merged with Pomodoro */}
 
                     {activeFocusUsers.length > 0 && (
                         <div className="flex -space-x-2 overflow-hidden">
