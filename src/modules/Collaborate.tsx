@@ -149,8 +149,8 @@ export function CollaborationPage({ userProfile }) {
   const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   
-  // Active call banner state
-  const [activeCallBanner, setActiveCallBanner] = useState<{ participants: { userName: string, userId: string }[], groupId: number, groupName: string } | null>(null);
+  const [activeCallBanner, setActiveCallBanner] = useState<{ participants: { userName: string, userId: string }[], groupId: number | string, groupName: string } | null>(null);
+  const [activeVideoCallBanner, setActiveVideoCallBanner] = useState<{ participants: { userName: string, userId: string }[], groupId: number | string, groupName: string } | null>(null);
   
   // Call state
   const [incomingCall, setIncomingCall] = useState<any>(null);
@@ -336,6 +336,18 @@ export function CollaborationPage({ userProfile }) {
     socketRef.current.on("group_call_ended", (data) => {
         if (activeGroupIdRef.current && String(data.groupId) === String(activeGroupIdRef.current)) {
             setActiveCallBanner(null);
+        }
+    });
+
+    socketRef.current.on("group_video_active", (data) => {
+        if (activeGroupIdRef.current && String(data.groupId) === String(activeGroupIdRef.current)) {
+            setActiveVideoCallBanner(data);
+        }
+    });
+
+    socketRef.current.on("group_video_ended", (data) => {
+        if (activeGroupIdRef.current && String(data.groupId) === String(activeGroupIdRef.current)) {
+            setActiveVideoCallBanner(null);
         }
     });
 
@@ -618,8 +630,58 @@ export function CollaborationPage({ userProfile }) {
   };
 
   const toggleVideoCall = () => {
-      if (activeGroupCall === 'audio') toggleVoiceCall(); // End audio first
-      setActiveGroupCall(activeGroupCall === 'video' ? null : 'video');
+      if (activeGroupCall === 'audio') {
+          toggleVoiceCall(); // End audio first
+      }
+      
+      if (activeGroupCall === 'video') {
+          // Leave video call
+          setActiveGroupCall(null);
+          if (activeChannel) {
+              const activeGroup = studyGroups.find(g => g.name === activeChannel);
+              if (activeGroup && socketRef.current) {
+                  socketRef.current.emit("leave_group_video", { groupId: activeGroup.id, groupName: activeGroup.name });
+              }
+          }
+      } else {
+          // Join video call
+          setActiveGroupCall('video');
+          const activeGroup = studyGroups.find(g => g.name === activeChannel);
+          if (activeGroup && socketRef.current) {
+              socketRef.current.emit("join_group_video", {
+                  groupId: activeGroup.id,
+                  userId: userProfile?.id,
+                  userName: userProfile?.name,
+                  groupName: activeGroup.name
+              });
+
+              // Broadcast persistent system message
+              const msgText = `📹 ${userProfile?.name} has started a Video Session! Click the video icon at the top to join.`;
+              const msgData = {
+                  room: activeGroup.name,
+                  user: "System",
+                  message: msgText,
+                  time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  avatar: "🤖",
+                  type: 'text'
+              };
+              socketRef.current.emit("send_message", msgData);
+              try {
+                  fetch(`${API_BASE_URL}/messages/send`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                          userId: userProfile?.id || 0,
+                          userName: "System",
+                          message: msgText,
+                          groupName: activeGroup.name,
+                      }),
+                  });
+              } catch (e) {
+                  console.error("Failed to save system video message", e);
+              }
+          }
+      }
   };
 
   const handleSend = async () => {
@@ -1038,10 +1100,12 @@ export function CollaborationPage({ userProfile }) {
       // Check if there's an active call in this group
       if (socketRef.current) {
         socketRef.current.emit("check_active_call", { groupId: activeGroup.id, groupName: activeGroup.name });
+        socketRef.current.emit("check_active_video_call", { groupId: activeGroup.id, groupName: activeGroup.name });
       }
     } else {
       setGroupMembers([]);
       setActiveCallBanner(null);
+      setActiveVideoCallBanner(null);
     }
   }, [activeChannel]);
 
@@ -1410,6 +1474,33 @@ export function CollaborationPage({ userProfile }) {
                  </div>
              )}
 
+             {/* Live Video Call Join Banner (shown when someone else started a video call and you haven't joined) */}
+             {activeVideoCallBanner && activeGroupCall !== 'video' && activeGroup && (
+                 <div className="bg-gradient-to-r from-pink-600 to-rose-600 border-b border-pink-700 p-4 shrink-0 shadow-xl z-10 animate-fade-in">
+                     <div className="flex items-center justify-between">
+                         <div className="flex items-center gap-3">
+                             <div className="relative">
+                                 <Video className="w-6 h-6 text-white" />
+                                 <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-ping" />
+                                 <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full" />
+                             </div>
+                             <div>
+                                 <div className="text-white font-bold text-sm">📹 Active Video Session</div>
+                                 <div className="text-pink-100 text-xs">
+                                     {activeVideoCallBanner.participants.map(p => p.userName).join(', ')} {activeVideoCallBanner.participants.length === 1 ? 'is' : 'are'} in the call
+                                 </div>
+                             </div>
+                         </div>
+                         <button 
+                             onClick={toggleVideoCall}
+                             className="px-5 py-2.5 bg-white text-pink-700 font-bold text-sm rounded-xl hover:bg-pink-50 transition shadow-lg flex items-center gap-2"
+                         >
+                             <Video className="w-4 h-4" /> Join Now
+                         </button>
+                     </div>
+                 </div>
+             )}
+
              {/* Group Voice Call Native Interface */}
              {activeGroupCall === 'audio' && activeGroup && (
                  <div className="bg-stone-900 border-b border-stone-800 p-4 shrink-0 shadow-xl overflow-hidden animate-fade-in z-10 transition-all min-h-[120px] relative flex flex-col justify-center">
@@ -1459,7 +1550,7 @@ export function CollaborationPage({ userProfile }) {
                          <button onClick={() => setIsFullScreenCall(!isFullScreenCall)} className="p-2 bg-black/60 text-white hover:bg-stone-700 rounded transition backdrop-blur-sm shadow" title={isFullScreenCall ? "Exit Fullscreen" : "Fullscreen"}>
                             <Maximize2 className="w-4 h-4"/>
                          </button>
-                         <button onClick={() => { setActiveGroupCall(null); setIsFullScreenCall(false); }} className="p-2 bg-black/60 text-white hover:bg-red-500 rounded transition backdrop-blur-sm shadow" title="Leave Call">
+                         <button onClick={() => { toggleVideoCall(); setIsFullScreenCall(false); }} className="p-2 bg-black/60 text-white hover:bg-red-500 rounded transition backdrop-blur-sm shadow" title="Leave Call">
                             <X className="w-4 h-4"/>
                          </button>
                      </div>
