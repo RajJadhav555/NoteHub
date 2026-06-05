@@ -27,6 +27,17 @@ export function CareerGuidance({ userProfile }) {
       timestamp: new Date(),
     },
   ]);
+
+  // Update greeting when user logs in
+  React.useEffect(() => {
+    setMessages((prev) => {
+      const newMessages = [...prev];
+      if (newMessages.length > 0 && newMessages[0].type === "ai") {
+        newMessages[0].content = `Hello ${userProfile.name}! I'm your AI Career Advisor. I've analyzed your profile and I'm here to help guide your academic and career journey. With ${userProfile.points || 0} points and rank #${userProfile.rank || 0}, you're doing great! What would you like to explore today?`;
+      }
+      return newMessages;
+    });
+  }, [userProfile.id, userProfile.name, userProfile.points, userProfile.rank]);
   const [inputMessage, setInputMessage] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [activeTab, setActiveTab] = useState("chat");

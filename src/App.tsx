@@ -147,7 +147,7 @@ export default function App() {
       try {
         setIsLoading(true);
         const [fetchedNotes, fetchedLeaderboard] = await Promise.all([
-          notesAPI.getVerifiedNotes(),
+          notesAPI.getAllNotes(),
           leaderboardAPI.getLeaderboard()
         ]);
         
