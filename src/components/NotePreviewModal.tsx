@@ -467,9 +467,10 @@ export function NotePreviewModal({ isOpen, onClose, note, onDownload, userProfil
               (note.file_url || note.file_name) ? (
                   (() => {
                     const url = note.file_name 
-                        ? `${API_BASE_URL}/notes/file/${note.file_name}` 
+                        ? `${API_BASE_URL}/notes/file/${encodeURIComponent(note.file_name)}` 
                         : note.file_url;
                     const type = (note.file_type || "").toUpperCase();
+
                     
                     // PDF Preview
                     if (type === 'PDF') {
