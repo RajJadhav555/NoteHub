@@ -181,8 +181,26 @@ export function CollaborationPage({ userProfile }) {
   const groupPeersRef = useRef<Map<string, SimplePeer.Instance>>(new Map());
   const localStreamRef = useRef<MediaStream | null>(null);
   const [isFullScreenCall, setIsFullScreenCall] = useState<boolean>(false);
-  const [studyGroups, setStudyGroups] = useState<StudyGroup[]>([]);
-  const [channelMessages, setChannelMessages] = useState<Message[]>([]);
+  const [studyGroups, setStudyGroups] = useState<StudyGroup[]>(() => {
+    try { const item = localStorage.getItem(`notehub_study_groups_${userProfile?.id}`); return item ? JSON.parse(item) : []; }
+    catch { return []; }
+  });
+  
+  const [chatCache, setChatCache] = useState<Record<string, Message[]>>(() => {
+    try { const item = localStorage.getItem(`notehub_chat_cache_${userProfile?.id}`); return item ? JSON.parse(item) : {}; }
+    catch { return {}; }
+  });
+  
+  const channelMessages = chatCache[activeChannel] || [];
+  const setChannelMessages = (updater: any) => {
+    setChatCache(prev => {
+      const currentMessages = prev[activeChannel] || [];
+      const newMessages = typeof updater === 'function' ? updater(currentMessages) : updater;
+      const newCache = { ...prev, [activeChannel]: newMessages };
+      localStorage.setItem(`notehub_chat_cache_${userProfile?.id}`, JSON.stringify(newCache));
+      return newCache;
+    });
+  };
   
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
@@ -305,6 +323,10 @@ export function CollaborationPage({ userProfile }) {
         console.log("Connected to socket server");
         // Refresh online users immediately on connect
         loadOnlineCount();
+        
+        // Join global notifications for project-wide real-time updates
+        socketRef.current.emit("join_room", "global_notifications");
+
         // Re-join active room on reconnect so focus events aren't lost
         if (activeChannelRef.current) {
             socketRef.current.emit("join_room", activeChannelRef.current);
@@ -312,19 +334,42 @@ export function CollaborationPage({ userProfile }) {
         if (userProfile?.id) {
             socketRef.current.emit("join_room", String(userProfile.id));
         }
+        // Also re-join all known study groups
+        studyGroups.forEach((g: any) => {
+            socketRef.current.emit("join_room", g.name);
+        });
     });
 
-    socketRef.current.on("receive_message", (data) => {
+    socketRef.current.on("refresh_groups", () => {
+        loadStudyGroups();
+    });
+
+    socketRef.current.on("refresh_group_members", (data: any) => {
+        if (data && data.groupId) {
+            loadGroupMembers(data.groupId);
+        }
+    });
+
+    socketRef.current.on("receive_message", (data: any) => {
+        setChatCache(prev => {
+            const roomMsgs = prev[data.room] || [];
+            const newCache = {
+                ...prev,
+                [data.room]: [...roomMsgs, {
+                    id: data.id || Date.now(),
+                    user: data.user,
+                    message: data.message,
+                    time: data.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    avatar: data.avatar,
+                    type: data.type,
+                    fileName: data.fileName
+                }]
+            };
+            localStorage.setItem(`notehub_chat_cache_${userProfile?.id}`, JSON.stringify(newCache));
+            return newCache;
+        });
+
         if (data.room === activeChannelRef.current) {
-            setChannelMessages((prev) => [...prev, {
-                id: Date.now(),
-                user: data.user,
-                message: data.message,
-                time: data.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                avatar: data.avatar,
-                type: data.type,
-                fileName: data.fileName
-            }]);
             scrollToBottom();
         }
     });
@@ -636,6 +681,11 @@ export function CollaborationPage({ userProfile }) {
       if (res.ok) {
         const data = await res.json();
         setStudyGroups(data);
+        localStorage.setItem(`notehub_study_groups_${userProfile?.id}`, JSON.stringify(data));
+        // Ensure we are joined to all group rooms to receive background messages
+        data.forEach((g: any) => {
+            if (socketRef.current) socketRef.current.emit("join_room", g.name);
+        });
       }
     } catch (e) {
       console.error("Failed to load study groups", e);
@@ -1273,6 +1323,7 @@ export function CollaborationPage({ userProfile }) {
       setNewGroupSubject("");
       setSelectedInvites([]);
       setStudentSearch("");
+      if (socketRef.current) socketRef.current.emit("group_update");
       loadStudyGroups();
     } catch (e: any) {
       alert(e.message || "Failed to create group. Please try again.");
@@ -1288,6 +1339,7 @@ export function CollaborationPage({ userProfile }) {
           body: JSON.stringify({ userId: userProfile?.id || 0 }),
       });
       if (res.ok) {
+        if (socketRef.current) socketRef.current.emit("group_member_update", { groupId });
         loadStudyGroups();
         setActiveChannel(groupName);
       }
@@ -1411,7 +1463,11 @@ export function CollaborationPage({ userProfile }) {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: userProfile?.id }),
       });
-      if (res.ok) { loadMyPendingInvites(); loadStudyGroups(); }
+      if (res.ok) { 
+          if (socketRef.current) socketRef.current.emit("group_update");
+          loadMyPendingInvites(); 
+          loadStudyGroups(); 
+      }
     } catch (e) { alert('Failed to accept invite.'); }
   };
 
@@ -1433,7 +1489,12 @@ export function CollaborationPage({ userProfile }) {
         body: JSON.stringify({ requesterId: userProfile?.id || 0, emailToAdd }),
       });
       const data = await res.json();
-      if (res.ok) { setEmailToAdd(""); loadGroupMembers(activeGroup.id); loadStudyGroups(); }
+      if (res.ok) { 
+          setEmailToAdd(""); 
+          if (socketRef.current) socketRef.current.emit("group_member_update", { groupId: activeGroup.id });
+          loadGroupMembers(activeGroup.id); 
+          loadStudyGroups(); 
+      }
       else alert(data.error || "Failed to add member.");
     } catch (e) { alert("Failed to add member."); }
   };
@@ -1447,6 +1508,7 @@ export function CollaborationPage({ userProfile }) {
         body: JSON.stringify({ requesterId: userProfile?.id || 0, targetUserId }),
       });
       if (res.ok) {
+        if (socketRef.current) socketRef.current.emit("group_member_update", { groupId: activeGroup.id });
         loadGroupMembers(activeGroup.id);
         loadStudyGroups();
       } else {
@@ -1469,6 +1531,7 @@ export function CollaborationPage({ userProfile }) {
       if (res.ok) {
         setShowGroupAdminModal(false);
         setActiveChannel("");
+        if (socketRef.current) socketRef.current.emit("group_update");
         loadStudyGroups();
       } else {
         const data = await res.json();
