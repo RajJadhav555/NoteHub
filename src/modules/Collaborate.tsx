@@ -119,6 +119,9 @@ export function CollaborationPage({ userProfile }) {
   const [newMessage, setNewMessage] = useState("");
   const [activeChannel, setActiveChannel] = useState("");
   const [activeGroupCall, setActiveGroupCall] = useState<string | null>(null);
+  const [groupVoicePeers, setGroupVoicePeers] = useState<{ socketId: string, userName: string, stream: MediaStream }[]>([]);
+  const groupPeersRef = useRef<Map<string, SimplePeer.Instance>>(new Map());
+  const localStreamRef = useRef<MediaStream | null>(null);
   const [isFullScreenCall, setIsFullScreenCall] = useState<boolean>(false);
   const [studyGroups, setStudyGroups] = useState<StudyGroup[]>([]);
   const [channelMessages, setChannelMessages] = useState<Message[]>([]);
@@ -297,6 +300,80 @@ export function CollaborationPage({ userProfile }) {
                 setFocusStartTime(null);
             }
         }
+    });
+
+    // --- Group WebRTC Voice Mesh Listeners ---
+    socketRef.current.on("group_voice_user_joined", (data) => {
+        console.log("Group Voice: User Joined", data);
+        if (localStreamRef.current) {
+            const peer = new SimplePeer({
+                initiator: true,
+                trickle: false,
+                stream: localStreamRef.current
+            });
+
+            peer.on("signal", signal => {
+                socketRef.current.emit("group_voice_signal", {
+                    targetSocketId: data.socketId,
+                    callerSocketId: socketRef.current.id,
+                    signal: signal,
+                    callerName: userProfile?.name,
+                    userId: userProfile?.id
+                });
+            });
+
+            peer.on("stream", incomingStream => {
+                setGroupVoicePeers(prev => {
+                    if (prev.find(p => p.socketId === data.socketId)) return prev;
+                    return [...prev, { socketId: data.socketId, userName: data.userName, stream: incomingStream }];
+                });
+            });
+
+            groupPeersRef.current.set(data.socketId, peer);
+        }
+    });
+
+    socketRef.current.on("group_voice_signal_receive", (data) => {
+        if (localStreamRef.current) {
+            let peer = groupPeersRef.current.get(data.callerSocketId);
+            
+            if (!peer) {
+                peer = new SimplePeer({
+                    initiator: false,
+                    trickle: false,
+                    stream: localStreamRef.current
+                });
+
+                peer.on("signal", signal => {
+                    socketRef.current.emit("group_voice_signal", {
+                        targetSocketId: data.callerSocketId,
+                        callerSocketId: socketRef.current.id,
+                        signal: signal,
+                        callerName: userProfile?.name,
+                        userId: userProfile?.id
+                    });
+                });
+
+                peer.on("stream", incomingStream => {
+                    setGroupVoicePeers(prev => {
+                        if (prev.find(p => p.socketId === data.callerSocketId)) return prev;
+                        return [...prev, { socketId: data.callerSocketId, userName: data.callerName, stream: incomingStream }];
+                    });
+                });
+
+                groupPeersRef.current.set(data.callerSocketId, peer);
+            }
+            peer.signal(data.signal);
+        }
+    });
+
+    socketRef.current.on("group_voice_user_left", (data) => {
+        const peer = groupPeersRef.current.get(data.socketId);
+        if (peer) {
+            peer.destroy();
+            groupPeersRef.current.delete(data.socketId);
+        }
+        setGroupVoicePeers(prev => prev.filter(p => p.socketId !== data.socketId));
     });
 
     return () => {
@@ -1079,13 +1156,51 @@ export function CollaborationPage({ userProfile }) {
                         </button>
                     )}
                     {/* Group Video Calling via Jitsi Meet */}
-                    <button onClick={() => setActiveGroupCall(activeGroupCall === 'audio' ? null : 'audio')} className={`p-2 rounded-full transition ${activeGroupCall === 'audio' ? 'text-emerald-500 bg-emerald-50 dark:bg-emerald-900/30' : 'text-stone-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20'}`} title="Toggle Group Audio Call"><Phone className="w-5 h-5"/></button>
-                    <button onClick={() => setActiveGroupCall(activeGroupCall === 'video' ? null : 'video')} className={`p-2 rounded-full transition ${activeGroupCall === 'video' ? 'text-pink-500 bg-pink-50 dark:bg-pink-900/30' : 'text-stone-400 hover:text-pink-500 hover:bg-pink-50 dark:hover:bg-pink-900/20'}`} title="Toggle Group Video Call"><Video className="w-5 h-5"/></button>
+                    <button onClick={toggleVoiceCall} className={`p-2 rounded-full transition ${activeGroupCall === 'audio' ? 'text-emerald-500 bg-emerald-50 dark:bg-emerald-900/30' : 'text-stone-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20'}`} title="Toggle Group Audio Call"><Phone className="w-5 h-5"/></button>
+                    <button onClick={toggleVideoCall} className={`p-2 rounded-full transition ${activeGroupCall === 'video' ? 'text-pink-500 bg-pink-50 dark:bg-pink-900/30' : 'text-stone-400 hover:text-pink-500 hover:bg-pink-50 dark:hover:bg-pink-900/20'}`} title="Toggle Group Video Call"><Video className="w-5 h-5"/></button>
                 </div>
              </div>
 
+             {/* Group Voice Call Native Interface */}
+             {activeGroupCall === 'audio' && activeGroup && (
+                 <div className="bg-stone-900 border-b border-stone-800 p-4 shrink-0 shadow-xl overflow-hidden animate-fade-in z-10 transition-all min-h-[120px] relative flex flex-col justify-center">
+                     <div className="absolute top-2 left-2 px-2 py-1 bg-black/60 text-white text-xs rounded uppercase tracking-wider z-20 font-bold backdrop-blur-sm shadow flex items-center gap-2">
+                        <span className="animate-pulse w-2 h-2 bg-emerald-500 rounded-full" />
+                        Live Voice Channel: {activeGroup.name}
+                     </div>
+                     <button onClick={toggleVoiceCall} className="absolute top-2 right-2 z-20 p-2 bg-black/60 text-white hover:bg-red-500 rounded transition backdrop-blur-sm shadow" title="Leave Channel">
+                        <PhoneOff className="w-4 h-4"/>
+                     </button>
+                     
+                     <div className="flex items-center gap-4 mt-6 overflow-x-auto pb-2">
+                         <div className="flex flex-col items-center">
+                             <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-900/40 font-bold flex items-center justify-center text-emerald-700 dark:text-emerald-400 text-lg border-2 border-emerald-500 relative">
+                                 {userProfile?.name?.[0]}
+                             </div>
+                             <span className="text-xs mt-1 text-emerald-500 font-bold">You</span>
+                         </div>
+                         {groupVoicePeers.map(p => (
+                             <div key={p.socketId} className="flex flex-col items-center">
+                                 <div className="w-12 h-12 rounded-full bg-indigo-100 dark:bg-indigo-900/40 font-bold flex items-center justify-center text-indigo-700 dark:text-indigo-400 text-lg ring-2 ring-indigo-500/50">
+                                     {p.userName?.[0] || '?'}
+                                 </div>
+                                 <span className="text-xs mt-1 text-stone-400 font-medium truncate w-16 text-center">{p.userName}</span>
+                                 {/* Render audio element */}
+                                 <audio 
+                                    ref={el => { if (el && p.stream) el.srcObject = p.stream; }} 
+                                    autoPlay 
+                                 />
+                             </div>
+                         ))}
+                         {groupVoicePeers.length === 0 && (
+                             <div className="text-stone-500 text-sm italic mt-2 ml-4">Waiting for others to join...</div>
+                         )}
+                     </div>
+                 </div>
+             )}
+
              {/* Group Call Interface Overlay (Jitsi) */}
-             {activeGroupCall && activeGroup && (
+             {activeGroupCall === 'video' && activeGroup && (
                  <div className={`bg-stone-900 border-b border-stone-800 flex gap-0 shrink-0 shadow-xl overflow-hidden animate-fade-in transition-all relative ${isFullScreenCall ? 'fixed inset-0 z-[100] w-full h-full' : 'z-10 h-[400px]'}`}>
                      <div className="absolute top-2 left-2 px-2 py-1 bg-black/60 text-white text-xs rounded uppercase tracking-wider z-20 font-bold backdrop-blur-sm shadow flex items-center gap-2">
                         <span className="animate-pulse w-2 h-2 bg-red-500 rounded-full" />
