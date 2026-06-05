@@ -98,9 +98,9 @@ body {
 }
 
 @keyframes flare-text-glow {
-  0% { text-shadow: 0 0 4px rgba(79, 70, 229, 0.4); }
-  50% { text-shadow: 0 0 12px rgba(79, 70, 229, 0.8), 0 0 20px rgba(234, 179, 8, 0.5); }
-  100% { text-shadow: 0 0 4px rgba(79, 70, 229, 0.4); }
+  0% { filter: drop-shadow(0 0 2px rgba(79, 70, 229, 0.4)); }
+  50% { filter: drop-shadow(0 0 6px rgba(79, 70, 229, 0.8)); }
+  100% { filter: drop-shadow(0 0 2px rgba(79, 70, 229, 0.4)); }
 }
 
 .flare-glow {
