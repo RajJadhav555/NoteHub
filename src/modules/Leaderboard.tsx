@@ -1,18 +1,48 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Award, TrendingUp, Search, Upload, Crown } from "lucide-react/dist/esm/lucide-react";
 import { ScanModal } from "./ScanModal";
+import { io } from "socket.io-client";
+import { leaderboardAPI, API_BASE_URL } from "../services/api";
 
-export function GamificationPage({ leaderboard, userProfile, onAddNote }) {
+export function GamificationPage({ leaderboard: initialLeaderboard, userProfile, onAddNote }) {
   const [showScanModal, setShowScanModal] = useState(false);
   const fileInputRef = useRef(null);
   const [departmentWar, setDepartmentWar] = useState({ winningDepartment: null, scores: [] });
+  const [leaderboard, setLeaderboard] = useState(initialLeaderboard);
+
+  useEffect(() => {
+    setLeaderboard(initialLeaderboard);
+  }, [initialLeaderboard]);
 
   useEffect(() => {
     fetch('/api/leaderboard/department-war')
       .then(res => res.json())
       .then(data => setDepartmentWar(data))
       .catch(err => console.error("Dept War Fetch Error:", err));
-  }, []);
+
+    // Real-time updates via Socket.IO
+    const SOCKET_URL = window.location.hostname.includes('vercel.app') 
+        ? 'https://rajdjadhav-notehub-backend.hf.space'
+        : API_BASE_URL.replace('/api', '');
+
+    const socket = io(SOCKET_URL, {
+        query: { userId: userProfile?.id, userName: userProfile?.name },
+        transports: ['websocket', 'polling']
+    });
+
+    socket.on("online_status_changed", async () => {
+        try {
+            const freshLeaderboard = await leaderboardAPI.getLeaderboard();
+            setLeaderboard(freshLeaderboard || []);
+        } catch (e) {
+            console.error("Failed to fetch fresh leaderboard via socket", e);
+        }
+    });
+
+    return () => {
+        socket.disconnect();
+    };
+  }, [userProfile?.id]);
 
   const handleUploadClick = () => {
     fileInputRef.current?.click();
