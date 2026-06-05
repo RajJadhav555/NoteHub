@@ -118,6 +118,7 @@ export function CollaborationPage({ userProfile }) {
   console.log("CollaborationPage rendering...", userProfile);
   const [newMessage, setNewMessage] = useState("");
   const [activeChannel, setActiveChannel] = useState("");
+  const [activeGroupCall, setActiveGroupCall] = useState<boolean>(false);
   const [studyGroups, setStudyGroups] = useState<StudyGroup[]>([]);
   const [channelMessages, setChannelMessages] = useState<Message[]>([]);
   
@@ -1076,13 +1077,31 @@ export function CollaborationPage({ userProfile }) {
                             <Settings className="w-5 h-5"/>
                         </button>
                     )}
-                    {/* The call buttons here could initiate room calls, but for now we only support 1-1 via specific users. Let's just mock a group call initiator for UI completeness */}
-                    <button onClick={() => alert("Group calling is coming soon!\\n\\nTo start a 1-on-1 call, click the phone/video icons next to a student in the 'Online Students' list on the left.")} className="p-2 text-stone-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-full transition" title="Start Audio Study"><Phone className="w-5 h-5"/></button>
-                    <button onClick={() => alert("Group video calling is coming soon!\\n\\nTo start a 1-on-1 video call, click the phone/video icons next to a student in the 'Online Students' list on the left.")} className="p-2 text-stone-400 hover:text-pink-500 hover:bg-pink-50 dark:hover:bg-pink-900/20 rounded-full transition" title="Start Video Study"><Video className="w-5 h-5"/></button>
+                    {/* Group Video Calling via Jitsi Meet */}
+                    <button onClick={() => setActiveGroupCall(!activeGroupCall)} className={`p-2 rounded-full transition ${activeGroupCall ? 'text-emerald-500 bg-emerald-50 dark:bg-emerald-900/30' : 'text-stone-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20'}`} title="Toggle Group Call"><Phone className="w-5 h-5"/></button>
+                    <button onClick={() => setActiveGroupCall(!activeGroupCall)} className={`p-2 rounded-full transition ${activeGroupCall ? 'text-pink-500 bg-pink-50 dark:bg-pink-900/30' : 'text-stone-400 hover:text-pink-500 hover:bg-pink-50 dark:hover:bg-pink-900/20'}`} title="Toggle Group Video Call"><Video className="w-5 h-5"/></button>
                 </div>
              </div>
 
-             {/* Inline Call Interface Overlay */}
+             {/* Group Call Interface Overlay (Jitsi) */}
+             {activeGroupCall && selectedChat?.type === 'group' && (
+                 <div className="bg-stone-900 border-b border-stone-800 flex gap-0 shrink-0 shadow-xl overflow-hidden animate-fade-in z-10 transition-all h-[400px] relative">
+                     <div className="absolute top-2 left-2 px-2 py-1 bg-black/60 text-white text-xs rounded uppercase tracking-wider z-20 font-bold backdrop-blur-sm shadow flex items-center gap-2">
+                        <span className="animate-pulse w-2 h-2 bg-red-500 rounded-full" />
+                        Live Group Session
+                     </div>
+                     <button onClick={() => setActiveGroupCall(false)} className="absolute top-2 right-2 z-20 p-2 bg-black/60 text-white hover:bg-red-500 rounded transition backdrop-blur-sm shadow" title="Leave Call">
+                        <X className="w-4 h-4"/>
+                     </button>
+                     <iframe 
+                        allow="camera; microphone; display-capture; autoplay; clipboard-write"
+                        src={`https://meet.jit.si/NoteHub-Group-${selectedChat.id}#config.prejoinPageEnabled=false&userInfo.displayName="${encodeURIComponent(userProfile?.name || 'Student')}"`}
+                        className="w-full h-full border-0"
+                     />
+                 </div>
+             )}
+
+             {/* Inline Call Interface Overlay (1-on-1) */}
              {videoCallData.isActive && (
                  <div className="bg-stone-900 border-b border-stone-800 p-4 flex gap-4 shrink-0 shadow-xl overflow-hidden animate-fade-in z-10 transition-all h-[260px] relative">
                      <div className="absolute top-2 left-2 px-2 py-1 bg-black/50 text-white text-xs rounded uppercase tracking-wider z-20 font-bold backdrop-blur-sm shadow flex items-center gap-2">
