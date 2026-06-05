@@ -13,6 +13,7 @@ import { CareerGuidance } from './modules/CareerAI';
 import { ProfilePage } from './modules/Profile';
 import { PYQAnalyzer } from './modules/PYQAnalyzer';
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
+import { io } from "socket.io-client";
 
 import { 
   notesAPI, 
@@ -230,7 +231,6 @@ export default function App() {
   useEffect(() => {
     if (!isLoggedIn || !(userProfile as any)?.id) return;
 
-
     const sendPulse = () => {
        // @ts-ignore
        usersAPI.sendHeartbeat((userProfile as any).id, (userProfile as any).current_session_token || null);
@@ -239,6 +239,34 @@ export default function App() {
     sendPulse(); // Immediate pulse
     const interval = setInterval(sendPulse, 60000); // Pulse every 60s
     return () => clearInterval(interval);
+  }, [isLoggedIn, (userProfile as any).id]);
+
+  // Global Web Socket for real-time presence
+  useEffect(() => {
+    if (!isLoggedIn || !(userProfile as any)?.id) return;
+    
+    const SOCKET_URL = window.location.hostname.includes('vercel.app') 
+        ? 'https://rajdjadhav-notehub-backend.hf.space'
+        // @ts-ignore
+        : API_BASE_URL.replace('/api', '');
+
+    const globalSocket = io(SOCKET_URL, {
+        query: { userId: (userProfile as any).id, userName: (userProfile as any).name },
+        transports: ['websocket', 'polling']
+    });
+
+    globalSocket.on("online_status_changed", async () => {
+        try {
+            const freshLeaderboard = await leaderboardAPI.getLeaderboard();
+            setLeaderboard(freshLeaderboard || []);
+        } catch (e) {
+            console.error("Failed to fetch fresh leaderboard via socket", e);
+        }
+    });
+
+    return () => {
+        globalSocket.disconnect();
+    };
   }, [isLoggedIn, (userProfile as any).id]);
 
   // Handle click outside to close menus
