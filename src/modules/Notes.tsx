@@ -15,9 +15,11 @@ import {
   BookOpen,
   FileText,
   Trash2,
+  Pin,
 } from "lucide-react/dist/esm/lucide-react";
 import { UploadModal } from "../components/UploadModal";
 import { NotePreviewModal } from "../components/NotePreviewModal";
+import { API_BASE_URL } from "../services/api";
 
 export function NotesAIChatModal({ onClose }) {
     const [messages, setMessages] = useState([
@@ -263,6 +265,41 @@ export function VerifiedNotesPage({ notes, onVerify, onDownload, userProfile, on
   const [selectedCourse, setSelectedCourse] = useState("All");
   const [selectedYear, setSelectedYear] = useState("All");
   const [selectedSemester, setSelectedSemester] = useState("All");
+
+  const [pinningNote, setPinningNote] = useState<any>(null);
+  const [studyGroups, setStudyGroups] = useState<any[]>([]);
+  const [isPinning, setIsPinning] = useState(false);
+
+  useEffect(() => {
+    if (userProfile?.id) {
+        fetch(`${API_BASE_URL}/collaboration/groups?userId=${userProfile.id}`)
+            .then(res => res.json())
+            .then(data => setStudyGroups(data))
+            .catch(e => console.error("Failed to load study groups for pinning", e));
+    }
+  }, [userProfile?.id]);
+
+  const handlePinNote = async (groupId: number, groupName: string) => {
+    if (!pinningNote || isPinning) return;
+    setIsPinning(true);
+    try {
+        const res = await fetch(`${API_BASE_URL}/collaboration/groups/${groupId}/library`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: userProfile?.id || 0, noteId: pinningNote.id })
+        });
+        if (res.ok) {
+            alert(`✅ Note successfully pinned to ${groupName}!`);
+            setPinningNote(null);
+        } else {
+            alert('Failed to pin note. Please try again.');
+        }
+    } catch (e) {
+        alert('Failed to pin note. Please try again.');
+    } finally {
+        setIsPinning(false);
+    }
+  };
 
   const handleUploadClick = () => {
     setShowUploadModal(true);
@@ -594,12 +631,20 @@ export function VerifiedNotesPage({ notes, onVerify, onDownload, userProfile, on
                             {[1, 2, 3, 4, 5].map(star => (
                                 <Star 
                                     key={star} 
-                                    className={`w-3.5 h-3.5 ${star <= Math.round(note.rating || 0) ? 'fill-amber-400 text-amber-400' : 'text-stone-300 dark:text-stone-600'}`} 
+                className={`w-3.5 h-3.5 ${star <= Math.round(note.rating || 0) ? 'fill-amber-400 text-amber-400' : 'text-stone-300 dark:text-stone-600'}`} 
                                 />
                             ))}
                          </span>
                       </div>
+                      
                       <div className="flex gap-2">
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); setPinningNote(note); }}
+                            className="p-1.5 text-stone-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition"
+                            title="Pin to Study Group"
+                        >
+                            <Pin className="w-4 h-4" />
+                        </button>
                           {/* Delete Button (Owner Only) */}
                           {userProfile?.id && (String(userProfile.id) === String(note.uploader_id) || userProfile.role === 'admin') && (
                              <button 
@@ -644,19 +689,68 @@ export function VerifiedNotesPage({ notes, onVerify, onDownload, userProfile, on
           userProfile={userProfile}
         />
       )}
-      {previewNote && (
-          <NotePreviewModal 
-             isOpen={!!previewNote}
-             onClose={() => setPreviewNote(null)}
-             note={previewNote}
-             onDownload={handleDownloadClick}
-             userProfile={userProfile}
-             onRateUpdate={(noteId, newRating) => {
+        
+        {/* NOTE PREVIEW MODAL */}
+        <NotePreviewModal 
+            note={previewNote}
+            isOpen={!!previewNote}
+            onClose={() => setPreviewNote(null)}
+            onDownload={(note) => {
+                 handleDownloadClick(note);
+                 setPreviewNote(null);
+            }}
+            userProfile={userProfile}
+            onRateUpdate={(noteId, newRating) => {
                  if (onRateUpdate) onRateUpdate(noteId, newRating);
                  setPreviewNote(prev => prev ? {...prev, rating: newRating} : prev);
              }}
-          />
-      )}
+        />
+
+        {/* PIN TO GROUP MODAL */}
+        {pinningNote && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-sm animate-fade-in">
+                <div className="bg-white dark:bg-stone-900 rounded-2xl w-full max-w-sm shadow-2xl border border-stone-200 dark:border-stone-800 p-6 relative">
+                    <button 
+                        onClick={() => setPinningNote(null)}
+                        className="absolute top-4 right-4 text-stone-400 hover:text-stone-600 dark:hover:text-stone-300 transition"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
+                    
+                    <div className="mb-4">
+                        <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center mb-3">
+                            <Pin className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+                        </div>
+                        <h3 className="text-xl font-bold text-stone-900 dark:text-white mb-1 font-heading">Pin Note</h3>
+                        <p className="text-sm text-stone-500 dark:text-stone-400">
+                            Share <strong>{pinningNote.title}</strong> with your study groups.
+                        </p>
+                    </div>
+
+                    <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
+                        {studyGroups.length === 0 ? (
+                            <p className="text-sm text-stone-500 py-4 text-center">You haven't joined any study groups yet.</p>
+                        ) : (
+                            studyGroups.map(group => (
+                                <button
+                                    key={group.id}
+                                    onClick={() => handlePinNote(group.id, group.name)}
+                                    disabled={isPinning}
+                                    className="w-full flex items-center justify-between p-3 rounded-xl border border-stone-100 dark:border-stone-800 hover:bg-stone-50 dark:hover:bg-stone-800 transition disabled:opacity-50"
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-lg" style={{ background: group.theme_color ? `${group.theme_color}20` : '#f3f4f6' }}>
+                                            {group.avatar_emoji || '📚'}
+                                        </div>
+                                        <span className="font-bold text-sm text-stone-900 dark:text-white">{group.name}</span>
+                                    </div>
+                                </button>
+                            ))
+                        )}
+                    </div>
+                </div>
+            </div>
+        )}
     </div>
   );
 }
