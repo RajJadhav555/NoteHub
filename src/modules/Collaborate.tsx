@@ -119,6 +119,7 @@ interface PomodoroState {
   timeLeft: number;
   duration: number;
   phase: 'study' | 'break';
+  isStrict?: boolean;
 }
 
 const THEME_COLORS: Record<string, { primary: string; light: string; dark: string; ring: string; text: string; bg: string }> = {
@@ -240,6 +241,7 @@ export function CollaborationPage({ userProfile }) {
   // === NEW: Study Customization State ===
   const [activeTab, setActiveTab] = useState<'chat' | 'library' | 'goals' | 'meets'>('chat');
   const [pomodoro, setPomodoro] = useState<PomodoroState | null>(null);
+  const [strictMode, setStrictMode] = useState(false);
   const [libraryNotes, setLibraryNotes] = useState<LibraryNote[]>([]);
   const [groupGoals, setGroupGoals] = useState<GroupGoal[]>([]);
   const [groupMeets, setGroupMeets] = useState<GroupMeet[]>([]);
@@ -584,13 +586,19 @@ export function CollaborationPage({ userProfile }) {
     // --- Pomodoro Timer Listeners ---
     socketRef.current.on("group_pomodoro_started", (data) => {
         if (activeGroupIdRef.current && String(data.groupId) === String(activeGroupIdRef.current)) {
-            setPomodoro({ isRunning: true, timeLeft: data.timeLeft, duration: data.duration, phase: 'study' });
+            setPomodoro({ isRunning: true, timeLeft: data.timeLeft, duration: data.duration, phase: 'study', isStrict: data.isStrict });
+            if (data.isStrict && data.phase === 'study') {
+                 startFocusLink();
+            }
         }
     });
 
     socketRef.current.on("group_pomodoro_tick", (data) => {
         if (activeGroupIdRef.current && String(data.groupId) === String(activeGroupIdRef.current)) {
-            setPomodoro({ isRunning: data.isRunning, timeLeft: data.timeLeft, duration: data.duration, phase: data.phase });
+            setPomodoro({ isRunning: data.isRunning, timeLeft: data.timeLeft, duration: data.duration, phase: data.phase, isStrict: data.isStrict });
+            if (data.isStrict && data.phase === 'break' && isFocusLinkedRef.current) {
+                 breakFocusLink("Pomodoro break started");
+            }
         }
     });
 
@@ -798,8 +806,9 @@ export function CollaborationPage({ userProfile }) {
     socketRef.current.emit("start_group_pomodoro", {
       groupId: ag.id,
       groupName: ag.name,
-      duration,
-      userName: userProfile?.name
+      duration: duration,
+      userName: userProfile?.name || 'Someone',
+      isStrict: strictMode
     });
   };
 
@@ -1799,15 +1808,27 @@ export function CollaborationPage({ userProfile }) {
                         <span className="font-mono font-bold text-sm" style={{ color: pomodoro.phase === 'study' ? activeTheme.text : '#e11d48' }}>
                           {Math.floor(pomodoro.timeLeft / 60).toString().padStart(2, '0')}:{(pomodoro.timeLeft % 60).toString().padStart(2, '0')}
                         </span>
-                        <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: pomodoro.phase === 'study' ? activeTheme.text : '#e11d48' }}>
+                        <span className="text-[10px] font-bold uppercase tracking-wide flex items-center gap-1" style={{ color: pomodoro.phase === 'study' ? activeTheme.text : '#e11d48' }}>
                           {pomodoro.phase === 'study' ? '📚 Study' : '☕ Break'}
+                          {pomodoro.isStrict && <Lock className="w-3 h-3 text-red-500" title="Strict Mode Active" />}
                         </span>
                         <button onClick={stopPomodoro} className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-full transition" title="Stop Timer">
-                          <Square className="w-3.5 h-3.5 text-red-500"/>
+                          <Square className="w-3.5 h-3.5 text-red-500 fill-red-500"/>
                         </button>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-2">
+                        <label className="flex items-center gap-1.5 cursor-pointer mr-2 px-2 py-1 rounded-lg hover:bg-stone-100 dark:hover:bg-stone-800 transition border border-transparent hover:border-stone-200 dark:hover:border-stone-700">
+                           <input 
+                              type="checkbox" 
+                              checked={strictMode}
+                              onChange={(e) => setStrictMode(e.target.checked)}
+                              className="rounded text-indigo-600 focus:ring-indigo-500 bg-stone-100 border-stone-300 dark:bg-stone-800 dark:border-stone-700"
+                           />
+                           <span className="text-xs font-semibold text-stone-600 dark:text-stone-400 flex items-center gap-1">
+                               Strict Mode
+                           </span>
+                        </label>
                         {[25, 45, 60].map(d => (
                           <button key={d} onClick={() => startPomodoro(d)}
                             className="px-2 py-1 text-[11px] font-bold rounded-lg transition hover:shadow-sm"
