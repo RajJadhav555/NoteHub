@@ -14,6 +14,26 @@ export function ProfilePage({ userProfile, onProfileUpdate }) {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
+  const [recentChats, setRecentChats] = useState<any[]>([]);
+
+  React.useEffect(() => {
+    const fetchRecentChats = async () => {
+      try {
+        const token = sessionStorage.getItem('notehub_token');
+        if (!token) return;
+        const res = await fetch('/api/chat-history/recent/all', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setRecentChats(data.recent || []);
+        }
+      } catch (err) {
+        console.error("Failed to fetch recent chats", err);
+      }
+    };
+    fetchRecentChats();
+  }, []);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -403,6 +423,37 @@ export function ProfilePage({ userProfile, onProfileUpdate }) {
                 </div>
               )}
             </form>
+          </div>
+
+          {/* AI Conversations History */}
+          <div className="bg-white dark:bg-stone-900 rounded-2xl p-8 shadow-sm border border-stone-200 dark:border-stone-800 mt-8">
+            <h2 className="text-2xl font-bold text-stone-900 dark:text-white font-heading mb-6 flex items-center gap-2">
+              <span className="text-2xl">🤖</span> AI Conversations History
+            </h2>
+            
+            {recentChats.length === 0 ? (
+              <div className="text-center p-8 bg-stone-50 dark:bg-stone-950/50 rounded-xl border border-stone-200 dark:border-stone-800 text-stone-500">
+                You haven't started any AI conversations yet. Visit the Career Advisor or Notes AI to begin!
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {recentChats.map((chat, idx) => (
+                  <div key={idx} className="p-4 rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950/30 transition hover:border-indigo-200">
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="px-3 py-1 bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 text-xs font-bold rounded-full capitalize flex items-center gap-1">
+                         {chat.bot_type} AI
+                      </span>
+                      <span className="text-[10px] text-stone-400 font-medium">
+                        {new Date(chat.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <p className="text-sm text-stone-600 dark:text-stone-300 line-clamp-2">
+                      <span className="font-semibold text-stone-900 dark:text-white capitalize">{chat.role}:</span> {chat.content}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

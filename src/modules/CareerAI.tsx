@@ -28,16 +28,47 @@ export function CareerGuidance({ userProfile }) {
     },
   ]);
 
-  // Update greeting when user logs in
+  // Fetch chat history when component mounts
   React.useEffect(() => {
-    setMessages((prev) => {
-      const newMessages = [...prev];
-      if (newMessages.length > 0 && newMessages[0].type === "ai") {
-        newMessages[0].content = `Hello ${userProfile.name}! I'm your AI Career Advisor. I've analyzed your profile and I'm here to help guide your academic and career journey. With ${userProfile.points || 0} points and rank #${userProfile.rank || 0}, you're doing great! What would you like to explore today?`;
+    const fetchHistory = async () => {
+      try {
+        const token = sessionStorage.getItem('notehub_token');
+        if (!token) return;
+        
+        const response = await fetch('/api/chat-history/career', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.history && data.history.length > 0) {
+            const historyMessages = data.history.map(msg => ({
+              type: msg.role === 'ai' ? 'ai' : 'user',
+              content: msg.content,
+              timestamp: msg.created_at || new Date()
+            }));
+            
+            // Set history, but ensure the greeting is still at the top if we want, or just history
+            // Wait, the default greeting is nice, let's keep it as the very first message
+            setMessages(prev => {
+              const defaultGreeting = {
+                type: "ai",
+                content: `Hello ${userProfile.name}! I'm your AI Career Advisor. I've analyzed your profile and I'm here to help guide your academic and career journey. With ${userProfile.points || 0} points and rank #${userProfile.rank || 0}, you're doing great! What would you like to explore today?`,
+                timestamp: new Date(),
+              };
+              return [defaultGreeting, ...historyMessages];
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load chat history:", err);
       }
-      return newMessages;
-    });
-  }, [userProfile.id, userProfile.name, userProfile.points, userProfile.rank]);
+    };
+    
+    fetchHistory();
+  }, [userProfile.name, userProfile.points, userProfile.rank]);
   const [inputMessage, setInputMessage] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [activeTab, setActiveTab] = useState("chat");
@@ -49,6 +80,29 @@ export function CareerGuidance({ userProfile }) {
   const [customWeeks, setCustomWeeks] = useState("");
   const [isGeneratingRoadmap, setIsGeneratingRoadmap] = useState(false);
   const [aiRoadmap, setAiRoadmap] = useState(null);
+
+  const clearChat = async () => {
+    if (window.confirm("Are you sure you want to clear your AI Career Advisor chat history?")) {
+      try {
+        const token = sessionStorage.getItem('notehub_token');
+        if (token) {
+          await fetch('/api/chat-history/career', {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+        }
+        setMessages([
+          {
+            type: "ai",
+            content: `Hello ${userProfile.name}! I'm your AI Career Advisor. I've analyzed your profile and I'm here to help guide your academic and career journey. With ${userProfile.points || 0} points and rank #${userProfile.rank || 0}, you're doing great! What would you like to explore today?`,
+            timestamp: new Date(),
+          }
+        ]);
+      } catch (err) {
+        console.error("Failed to clear chat history:", err);
+      }
+    }
+  };
 
   const careerPaths = [
     {
@@ -294,11 +348,17 @@ export function CareerGuidance({ userProfile }) {
               style={{ height: "600px" }}
             >
               {/* Chat Header */}
-              <div className="p-4 border-b border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50 backdrop-blur-sm">
+              <div className="p-4 border-b border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50 backdrop-blur-sm flex justify-between items-center">
                 <h2 className="text-lg font-bold flex items-center font-heading text-stone-900 dark:text-white">
                   <Brain className="w-5 h-5 mr-2 text-purple-600 dark:text-purple-400" />
                   AI Career Advisor
                 </h2>
+                <button 
+                  onClick={clearChat}
+                  className="text-xs text-stone-500 hover:text-red-500 transition-colors"
+                >
+                  Clear Chat
+                </button>
               </div>
 
               {/* Chat Messages */}

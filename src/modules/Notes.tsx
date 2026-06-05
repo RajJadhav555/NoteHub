@@ -36,6 +36,65 @@ export function NotesAIChatModal({ onClose }) {
 
   useEffect(scrollToBottom, [messages]);
 
+  useEffect(() => {
+    const fetchHistory = async () => {
+      try {
+        const token = sessionStorage.getItem('notehub_token');
+        if (!token) return;
+        
+        const response = await fetch('/api/chat-history/notes', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.history && data.history.length > 0) {
+            const historyMessages = data.history.map(msg => ({
+              text: msg.content,
+              isUser: msg.role !== 'ai'
+            }));
+            
+            setMessages(prev => {
+              const defaultGreeting = {
+                text: "Hello! I've read all the verified notes. Ask me anything about them!",
+                isUser: false,
+              };
+              return [defaultGreeting, ...historyMessages];
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load chat history:", err);
+      }
+    };
+    
+    fetchHistory();
+  }, []);
+
+  const clearChat = async () => {
+    if (window.confirm("Are you sure you want to clear your Notes AI chat history?")) {
+      try {
+        const token = sessionStorage.getItem('notehub_token');
+        if (token) {
+          await fetch('/api/chat-history/notes', {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+        }
+        setMessages([
+          {
+            text: "Hello! I've read all the verified notes. Ask me anything about them!",
+            isUser: false,
+          }
+        ]);
+      } catch (err) {
+        console.error("Failed to clear chat history:", err);
+      }
+    }
+  };
+
   const sendMessage = async () => {
     if (!input.trim()) return;
 
@@ -93,12 +152,20 @@ export function NotesAIChatModal({ onClose }) {
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-lg transition"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={clearChat}
+              className="text-xs text-stone-500 hover:text-red-500 transition-colors mr-2"
+            >
+              Clear Chat
+            </button>
+            <button
+              onClick={onClose}
+              className="p-2 text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-lg transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Messages */}
