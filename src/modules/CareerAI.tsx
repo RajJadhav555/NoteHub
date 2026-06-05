@@ -362,25 +362,31 @@ export function CareerGuidance({ userProfile }) {
               </div>
 
               {/* Chat Input */}
-              <div className="p-4 border-t border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900">
-                <div className="flex space-x-2">
-                  <input
-                    type="text"
-                    value={inputMessage}
-                    onChange={(e) => setInputMessage(e.target.value)}
-                    onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
-                    placeholder="Ask for career advice, project ideas, or skill roadmaps..."
-                    className="flex-1 bg-stone-100 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
-                  />
-                  <button
-                    onClick={handleSendMessage}
-                    disabled={isTyping || !inputMessage.trim()}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white p-3 rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Send className="w-5 h-5" />
-                  </button>
+              <div className="p-4 border-t border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={inputMessage}
+                      onChange={(e) => setInputMessage(e.target.value)}
+                      onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
+                      placeholder={!userProfile.id ? "Please log in to chat with the AI Advisor..." : "Ask about skills, interview tips, or career paths..."}
+                      disabled={isTyping || !userProfile.id}
+                      className="flex-1 bg-white dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-sm shadow-sm disabled:opacity-50 text-stone-900 dark:text-white"
+                    />
+                    <button
+                      onClick={handleSendMessage}
+                      disabled={isTyping || !inputMessage.trim() || !userProfile.id}
+                      className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-4 py-3 rounded-xl transition-colors shadow-sm flex items-center justify-center font-medium"
+                    >
+                      <Send className="w-5 h-5" />
+                    </button>
+                  </div>
+                  {!userProfile.id && (
+                    <p className="text-xs text-red-500 mt-2 text-center">
+                      You must be logged in to chat with the AI Career Advisor.
+                    </p>
+                  )}
                 </div>
-              </div>
             </div>
           </div>
         );
@@ -436,35 +442,43 @@ export function CareerGuidance({ userProfile }) {
                         </div>
 
                         {selectedDuration === "Custom Weeks" && (
-                            <div className="flex items-center gap-2 animate-fade-in">
+                            <div className="flex items-center gap-2 mt-4 md:mt-0">
                                 <input 
                                     type="number"
-                                    placeholder="Weeks"
+                                    min="1"
+                                    max="52"
                                     value={customWeeks}
                                     onChange={(e) => setCustomWeeks(e.target.value)}
-                                    className="w-20 px-3 py-1.5 bg-stone-50 dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                                    placeholder="7"
+                                    disabled={!userProfile.id}
+                                    className="w-20 px-3 py-1.5 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
                                 />
-                                <span className="text-xs text-stone-500 font-medium">weeks</span>
+                                <span className="text-sm text-stone-500">weeks</span>
                             </div>
                         )}
-
-                        <button 
-                            onClick={handleGenerateCustomRoadmap}
-                            disabled={isGeneratingRoadmap || (selectedDuration === "Custom Weeks" && !customWeeks)}
-                            className="ml-auto px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition text-xs font-bold disabled:opacity-50 flex items-center gap-2"
-                        >
-                            {isGeneratingRoadmap ? (
-                                <>
-                                    <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                    Planning...
-                                </>
-                            ) : (
-                                <>
-                                    <Sparkles className="w-3 h-3" />
-                                    Generate Custom Roadmap
-                                </>
+                        
+                        <div className="flex flex-col items-end">
+                            <button
+                                onClick={handleGenerateCustomRoadmap}
+                                disabled={isGeneratingRoadmap || (selectedDuration === "Custom Weeks" && !customWeeks) || !userProfile.id}
+                                className="ml-auto bg-purple-100 hover:bg-purple-200 dark:bg-purple-900/30 dark:hover:bg-purple-900/50 text-purple-600 dark:text-purple-400 font-medium px-4 py-2 rounded-xl text-sm transition-colors flex items-center shadow-sm disabled:opacity-50 mt-4 md:mt-0"
+                            >
+                                {isGeneratingRoadmap ? (
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-purple-600 border-t-transparent rounded-full animate-spin mr-2" />
+                                        Planning...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Sparkles className="w-4 h-4 mr-2" />
+                                        Generate Custom Roadmap
+                                    </>
+                                )}
+                            </button>
+                            {!userProfile.id && (
+                                <p className="text-xs text-red-500 mt-1">Login required</p>
                             )}
-                        </button>
+                        </div>
                     </div>
 
                     <div ref={roadmapRef} className="bg-white dark:bg-stone-900 rounded-xl p-8 border border-stone-200 dark:border-stone-800 shadow-sm relative overflow-hidden">
