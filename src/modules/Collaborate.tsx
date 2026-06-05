@@ -177,10 +177,13 @@ export function CollaborationPage({ userProfile }) {
   const socketRef = useRef<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const activeChannelRef = useRef("");
+  const activeGroupIdRef = useRef<number | string | null>(null);
 
   useEffect(() => {
     activeChannelRef.current = activeChannel;
-  }, [activeChannel]);
+    const activeGroup = studyGroups.find(g => g.name === activeChannel);
+    activeGroupIdRef.current = activeGroup?.id || null;
+  }, [activeChannel, studyGroups]);
 
   // Link-Unlink Focus State
   const [isFocusLinked, setIsFocusLinked] = useState(false);
@@ -325,13 +328,13 @@ export function CollaborationPage({ userProfile }) {
 
     // Listen for active call banner broadcasts
     socketRef.current.on("group_call_active", (data) => {
-        if (data.groupName === activeChannelRef.current) {
+        if (activeGroupIdRef.current && String(data.groupId) === String(activeGroupIdRef.current)) {
             setActiveCallBanner(data);
         }
     });
 
     socketRef.current.on("group_call_ended", (data) => {
-        if (data.groupName === activeChannelRef.current) {
+        if (activeGroupIdRef.current && String(data.groupId) === String(activeGroupIdRef.current)) {
             setActiveCallBanner(null);
         }
     });
@@ -1261,16 +1264,16 @@ export function CollaborationPage({ userProfile }) {
                           </div>
                           {/* Sort: online first, then offline */}
                           {[...groupMembers]
-                            .filter(m => m.name?.toLowerCase().includes(searchTerm.toLowerCase()) && m.id !== userProfile?.id)
+                            .filter(m => m.name?.toLowerCase().includes(searchTerm.toLowerCase()) && String(m.id) !== String(userProfile?.id))
                             .sort((a, b) => {
-                              const aOnline = onlineUsers.some(o => o.id === a.id);
-                              const bOnline = onlineUsers.some(o => o.id === b.id);
+                              const aOnline = onlineUsers.some(o => String(o.id) === String(a.id));
+                              const bOnline = onlineUsers.some(o => String(o.id) === String(b.id));
                               if (aOnline && !bOnline) return -1;
                               if (!aOnline && bOnline) return 1;
                               return 0;
                             })
                             .map(m => {
-                              const isOnline = onlineUsers.some(o => o.id === m.id);
+                              const isOnline = onlineUsers.some(o => String(o.id) === String(m.id));
                               return (
                                 <div key={m.id} className="flex justify-between items-center px-3 py-2 hover:bg-stone-50 dark:hover:bg-stone-800/50 rounded-xl transition">
                                     <div className="flex items-center gap-2 min-w-0">
