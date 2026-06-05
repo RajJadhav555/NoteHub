@@ -98,9 +98,9 @@ body {
 }
 
 @keyframes flare-text-glow {
-  0% { filter: drop-shadow(0 0 2px rgba(79, 70, 229, 0.4)); }
-  50% { filter: drop-shadow(0 0 6px rgba(79, 70, 229, 0.8)); }
-  100% { filter: drop-shadow(0 0 2px rgba(79, 70, 229, 0.4)); }
+  0% { filter: drop-shadow(0 0 2px rgba(79, 70, 229, 0.2)); }
+  50% { filter: drop-shadow(0 0 6px rgba(79, 70, 229, 0.4)); }
+  100% { filter: drop-shadow(0 0 2px rgba(79, 70, 229, 0.2)); }
 }
 
 .flare-glow {
@@ -124,15 +124,10 @@ body {
 
 .flare-glow-text {
   animation: flare-text-glow 2s ease-in-out infinite;
-  background: linear-gradient(to right, theme('colors.indigo.600'), theme('colors.purple.600'), theme('colors.amber.600'));
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: theme('colors.indigo.600');
   font-weight: 800;
 }
 
 .dark .flare-glow-text {
-  background: linear-gradient(to right, theme('colors.indigo.400'), theme('colors.purple.400'), theme('colors.amber.400'));
-  -webkit-background-clip: text;
-  background-clip: text;
+  color: theme('colors.indigo.400');
 }
