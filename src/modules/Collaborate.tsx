@@ -190,6 +190,22 @@ export function CollaborationPage({ userProfile }) {
     try { const item = localStorage.getItem(`notehub_chat_cache_${userProfile?.id}`); return item ? JSON.parse(item) : {}; }
     catch { return {}; }
   });
+
+  // Rehydrate cache smoothly when userProfile changes (e.g. login/logout)
+  useEffect(() => {
+    if (userProfile?.id) {
+        try {
+            const cachedChats = localStorage.getItem(`notehub_chat_cache_${userProfile.id}`);
+            if (cachedChats) setChatCache(JSON.parse(cachedChats));
+            
+            const cachedGroups = localStorage.getItem(`notehub_study_groups_${userProfile.id}`);
+            if (cachedGroups) setStudyGroups(JSON.parse(cachedGroups));
+        } catch (e) {}
+    } else {
+        setChatCache({});
+        setStudyGroups([]);
+    }
+  }, [userProfile?.id]);
   
   const channelMessages = chatCache[activeChannel] || [];
   const setChannelMessages = (updater: any) => {
@@ -711,16 +727,33 @@ export function CollaborationPage({ userProfile }) {
       const res = await fetch(`${API_BASE_URL}/messages/group/${channel}`);
       if (res.ok) {
         const data = await res.json();
-        setChannelMessages(
-          data.map((m: any) => ({
-            id: m.id,
-            user: m.user_name,
-            message: m.message,
-            time: new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-            avatar: m.user_name?.[0] || "?",
-          }))
-        );
-        scrollToBottom();
+        setChatCache(prev => {
+            const existingMsgs = prev[channel] || [];
+            const fetchedMsgs = data.map((m: any) => ({
+                id: m.id,
+                user: m.user_name,
+                message: m.message,
+                time: new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                avatar: m.user_name?.[0] || "?",
+                type: 'text'
+            }));
+            
+            // Intelligent merge: keep fetched msgs, append any local system/recent msgs not found in fetch
+            const merged = [...fetchedMsgs];
+            existingMsgs.forEach(em => {
+                // If it's a system message or an exact message not yet persisted in fetched
+                if (em.user === 'System' || !merged.find(fm => fm.message === em.message && fm.user === em.user)) {
+                    merged.push(em);
+                }
+            });
+            
+            const newCache = { ...prev, [channel]: merged };
+            if (userProfile?.id) {
+                localStorage.setItem(`notehub_chat_cache_${userProfile.id}`, JSON.stringify(newCache));
+            }
+            return newCache;
+        });
+        if (channel === activeChannelRef.current) scrollToBottom();
       }
     } catch (e) {
       console.error("Failed to load messages", e);
