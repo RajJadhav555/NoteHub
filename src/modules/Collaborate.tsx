@@ -7,9 +7,11 @@ import {
   Plus, Search, Phone, Settings, Maximize2,
   BookOpen, Target, Calendar, Timer, Play, Pause, Square,
   Pin, Trash2, CheckCircle2, Circle, Crown, Shield, Lock, Unlock,
-  Palette, Clock
+  Palette, Clock, Download
 } from "lucide-react/dist/esm/lucide-react";
 import { Buffer } from 'buffer';
+
+import { NotePreviewModal } from "../components/NotePreviewModal";
 
 // @ts-ignore
 import { io } from "socket.io-client";
@@ -112,6 +114,7 @@ interface LibraryNote {
   subject?: string;
   pinned_by_name?: string;
   pinned_at: string;
+  file_url?: string;
 }
 
 interface PomodoroState {
@@ -243,6 +246,7 @@ export function CollaborationPage({ userProfile }) {
   const [libraryNotes, setLibraryNotes] = useState<LibraryNote[]>([]);
   const [groupGoals, setGroupGoals] = useState<GroupGoal[]>([]);
   const [groupMeets, setGroupMeets] = useState<GroupMeet[]>([]);
+  const [previewNote, setPreviewNote] = useState<any>(null);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showAddGoalModal, setShowAddGoalModal] = useState(false);
   const [showAddMeetModal, setShowAddMeetModal] = useState(false);
@@ -870,10 +874,51 @@ export function CollaborationPage({ userProfile }) {
     try {
       await fetch(`${API_BASE_URL}/collaboration/groups/${ag.id}/library/${noteId}`, { method: 'DELETE' });
       loadLibrary(ag.id);
-    } catch (e) { console.error("Failed to unpin note", e); }
+      } catch (err) { console.error(err); }
   };
 
-  // === Goal Handlers ===
+  const handleLibraryCardClick = async (noteId: number) => {
+      try {
+          const token = sessionStorage.getItem('notehub_token');
+          const headers: Record<string,string> = {};
+          if (token) headers['Authorization'] = `Bearer ${token}`;
+          const res = await fetch(`${API_BASE_URL}/notes/${noteId}`, { headers });
+          if (res.ok) {
+              const fullNote = await res.json();
+              setPreviewNote(fullNote);
+          } else {
+              alert("Failed to load note details.");
+          }
+      } catch (e) {
+          console.error(e);
+          alert("Error loading note preview");
+      }
+  };
+
+  const handleDownloadLibraryNote = async (note: any) => {
+      try {
+          // Increment Count Backend if needed
+          const token = sessionStorage.getItem('notehub_token');
+          const dlHeaders: Record<string,string> = {};
+          if (token) dlHeaders['Authorization'] = `Bearer ${token}`;
+          fetch(`${API_BASE_URL}/notes/${note.id || note.note_id}/download`, { method: 'POST', headers: dlHeaders }).catch(e => console.error(e));
+
+          // Trigger Browser Download
+          const downloadUrl = `${note.file_url}${note.file_url.includes('?') ? '&' : '?'}download=true`;
+          const link = document.createElement('a');
+          link.href = downloadUrl;
+          link.setAttribute('download', note.title || 'Notehub_Document'); 
+          link.target = "_blank"; 
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+      } catch (e) {
+          console.error("Download error:", e);
+          alert("Failed to download note");
+      }
+  };
+
+  // === Goals Handlers ===
   const handleAddGoal = async () => {
     const ag = studyGroups.find(g => g.name === activeChannel);
     if (!ag || !newGoalTitle.trim()) return;
@@ -2196,14 +2241,31 @@ export function CollaborationPage({ userProfile }) {
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {libraryNotes.map(note => (
-                      <div key={note.id} className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl p-4 shadow-sm hover:shadow-md transition group">
+                      <div 
+                         key={note.id} 
+                         onClick={() => handleLibraryCardClick(note.note_id)}
+                         className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl p-4 shadow-sm hover:shadow-md transition group cursor-pointer"
+                      >
                         <div className="flex items-start justify-between mb-2">
                           <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: activeTheme.light }}>
                             <Pin className="w-4 h-4" style={{ color: activeTheme.primary }}/>
                           </div>
-                          <button onClick={() => handleUnpinNote(note.note_id)} className="p-1.5 text-stone-400 hover:text-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition opacity-0 group-hover:opacity-100">
-                            <Trash2 className="w-3.5 h-3.5"/>
-                          </button>
+                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition">
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); handleDownloadLibraryNote(note); }} 
+                                className="p-1.5 text-stone-400 hover:text-indigo-500 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition"
+                                title="Download Note"
+                            >
+                              <Download className="w-3.5 h-3.5"/>
+                            </button>
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); handleUnpinNote(note.note_id); }} 
+                                className="p-1.5 text-stone-400 hover:text-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition"
+                                title="Unpin from Library"
+                            >
+                              <Trash2 className="w-3.5 h-3.5"/>
+                            </button>
+                          </div>
                         </div>
                         <h4 className="font-bold text-sm text-stone-900 dark:text-white truncate">{note.title}</h4>
                         {note.subject && <span className="text-[10px] font-medium px-2 py-0.5 rounded-full mt-1 inline-block" style={{ background: activeTheme.light, color: activeTheme.text }}>{note.subject}</span>}
@@ -2765,6 +2827,16 @@ export function CollaborationPage({ userProfile }) {
           </div>
         </div>
       )}
+
+      {/* Pinned Note Preview Modal */}
+      <NotePreviewModal 
+          isOpen={!!previewNote}
+          onClose={() => setPreviewNote(null)}
+          note={previewNote}
+          onDownload={handleDownloadLibraryNote}
+          userProfile={userProfile}
+          onRateUpdate={() => {}}
+      />
 
     </div>
   );
