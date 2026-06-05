@@ -501,6 +501,49 @@ export function CollaborationPage({ userProfile }) {
     }
   };
 
+  const toggleVoiceCall = async () => {
+      if (activeGroupCall === 'audio') {
+          // Leave call
+          if (localStreamRef.current) {
+              localStreamRef.current.getTracks().forEach(t => t.stop());
+              localStreamRef.current = null;
+          }
+          groupPeersRef.current.forEach(peer => peer.destroy());
+          groupPeersRef.current.clear();
+          setGroupVoicePeers([]);
+          setActiveGroupCall(null);
+          
+          if (activeChannel) {
+              const activeGroup = studyGroups.find(g => g.name === activeChannel);
+              if (activeGroup) socketRef.current.emit("leave_group_voice", { groupId: activeGroup.id });
+          }
+      } else {
+          // Join call
+          if (activeGroupCall === 'video') setActiveGroupCall(null);
+          try {
+              const micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+              localStreamRef.current = micStream;
+              setActiveGroupCall('audio');
+              const activeGroup = studyGroups.find(g => g.name === activeChannel);
+              if (activeGroup) {
+                  socketRef.current.emit("join_group_voice", {
+                      groupId: activeGroup.id,
+                      userId: userProfile?.id,
+                      userName: userProfile?.name
+                  });
+              }
+          } catch (err) {
+              console.error("Failed to get microphone", err);
+              alert("Microphone access denied.");
+          }
+      }
+  };
+
+  const toggleVideoCall = () => {
+      if (activeGroupCall === 'audio') toggleVoiceCall(); // End audio first
+      setActiveGroupCall(activeGroupCall === 'video' ? null : 'video');
+  };
+
   const handleSend = async () => {
     if (!newMessage.trim()) return;
 
@@ -1217,7 +1260,7 @@ export function CollaborationPage({ userProfile }) {
                      <iframe 
                         allow="camera; microphone; fullscreen; display-capture; autoplay; clipboard-write"
                         allowFullScreen
-                        src={`https://meet.jit.si/NoteHub-Group-${activeGroup.id}#config.prejoinPageEnabled=false&userInfo.displayName="${encodeURIComponent(userProfile?.name || 'Student')}"${activeGroupCall === 'audio' ? '&config.startAudioOnly=true&config.startWithVideoMuted=true' : ''}`}
+                        src={`https://meet.jit.si/NoteHub-Group-${activeGroup.id}#config.prejoinPageEnabled=false&userInfo.displayName="${encodeURIComponent(userProfile?.name || 'Student')}"`}
                         className="w-full h-full border-0"
                      />
                  </div>
