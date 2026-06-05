@@ -1,5 +1,5 @@
 // API Configuration
-const API_BASE_URL = (import.meta.env && import.meta.env.VITE_API_URL) || 'https://rajdjadhav-notehub-backend.hf.space/api';
+export const API_BASE_URL = (import.meta.env && import.meta.env.VITE_API_URL) || 'https://rajdjadhav-notehub-backend.hf.space/api';
 
 // Auth header helper — reads JWT from sessionStorage (where App.tsx stores it)
 const getAuthHeaders = (includeContentType = true) => {
