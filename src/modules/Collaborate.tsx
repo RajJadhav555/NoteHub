@@ -4,7 +4,10 @@ console.log("Collaborate.tsx is loading...");
 import { 
   Video, Users, MessageSquare, File, Paperclip, Send, X, 
   CircleHelp as HelpCircle, Mic, MicOff, VideoOff, PhoneOff, 
-  Plus, Search, Phone, Settings, Maximize2
+  Plus, Search, Phone, Settings, Maximize2,
+  BookOpen, Target, Calendar, Timer, Play, Pause, Square,
+  Pin, Trash2, CheckCircle2, Circle, Crown, Shield, Lock, Unlock,
+  Palette, Clock
 } from "lucide-react/dist/esm/lucide-react";
 import { Buffer } from 'buffer';
 
@@ -55,6 +58,10 @@ interface StudyGroup {
   creator_id?: number;
   member_count: number;
   is_member?: boolean;
+  theme_color?: string;
+  avatar_emoji?: string;
+  is_private?: boolean;
+  allow_member_invites?: boolean;
 }
 
 interface Partner {
@@ -73,6 +80,57 @@ interface Message {
   type?: 'text' | 'file';
   fileName?: string;
 }
+
+interface GroupGoal {
+  id: number;
+  title: string;
+  description?: string;
+  assigned_to?: number;
+  assigned_name?: string;
+  is_completed: boolean;
+  created_by: number;
+  creator_name?: string;
+  created_at: string;
+  completed_at?: string;
+}
+
+interface GroupMeet {
+  id: number;
+  title: string;
+  description?: string;
+  scheduled_at: string;
+  duration_minutes: number;
+  meet_type: string;
+  created_by: number;
+  creator_name?: string;
+}
+
+interface LibraryNote {
+  id: number;
+  note_id: number;
+  title: string;
+  subject?: string;
+  pinned_by_name?: string;
+  pinned_at: string;
+}
+
+interface PomodoroState {
+  isRunning: boolean;
+  timeLeft: number;
+  duration: number;
+  phase: 'study' | 'break';
+}
+
+const THEME_COLORS: Record<string, { primary: string; light: string; dark: string; ring: string; text: string; bg: string }> = {
+  indigo:  { primary: '#6366f1', light: '#eef2ff', dark: 'rgba(99,102,241,0.15)', ring: 'rgba(99,102,241,0.3)',  text: '#4f46e5', bg: '#4338ca' },
+  emerald: { primary: '#10b981', light: '#ecfdf5', dark: 'rgba(16,185,129,0.15)', ring: 'rgba(16,185,129,0.3)', text: '#059669', bg: '#047857' },
+  rose:    { primary: '#f43f5e', light: '#fff1f2', dark: 'rgba(244,63,94,0.15)',  ring: 'rgba(244,63,94,0.3)',  text: '#e11d48', bg: '#be123c' },
+  amber:   { primary: '#f59e0b', light: '#fffbeb', dark: 'rgba(245,158,11,0.15)', ring: 'rgba(245,158,11,0.3)', text: '#d97706', bg: '#b45309' },
+  violet:  { primary: '#8b5cf6', light: '#f5f3ff', dark: 'rgba(139,92,246,0.15)', ring: 'rgba(139,92,246,0.3)', text: '#7c3aed', bg: '#6d28d9' },
+  cyan:    { primary: '#06b6d4', light: '#ecfeff', dark: 'rgba(6,182,212,0.15)',  ring: 'rgba(6,182,212,0.3)',  text: '#0891b2', bg: '#0e7490' },
+};
+
+const EMOJI_OPTIONS = ['📚', '🎯', '🧪', '💡', '🔬', '📐', '🎨', '🖥️', '🧠', '⚡', '🌟', '🏆'];
 
 const StudyTimer = ({ isActive, isLinked, startTime }) => {
   const [seconds, setSeconds] = useState(0);
@@ -144,6 +202,29 @@ export function CollaborationPage({ userProfile }) {
   const [myPendingInvites, setMyPendingInvites] = useState<any[]>([]);
   const [inviteStatus, setInviteStatus] = useState<string | null>(null);
   const [showInvitePanel, setShowInvitePanel] = useState(false);
+
+  // === NEW: Study Customization State ===
+  const [activeTab, setActiveTab] = useState<'chat' | 'library' | 'goals' | 'meets'>('chat');
+  const [pomodoro, setPomodoro] = useState<PomodoroState | null>(null);
+  const [libraryNotes, setLibraryNotes] = useState<LibraryNote[]>([]);
+  const [groupGoals, setGroupGoals] = useState<GroupGoal[]>([]);
+  const [groupMeets, setGroupMeets] = useState<GroupMeet[]>([]);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showAddGoalModal, setShowAddGoalModal] = useState(false);
+  const [showAddMeetModal, setShowAddMeetModal] = useState(false);
+  const [newGoalTitle, setNewGoalTitle] = useState('');
+  const [newGoalDesc, setNewGoalDesc] = useState('');
+  const [newGoalAssignee, setNewGoalAssignee] = useState<number | null>(null);
+  const [newMeetTitle, setNewMeetTitle] = useState('');
+  const [newMeetDesc, setNewMeetDesc] = useState('');
+  const [newMeetDate, setNewMeetDate] = useState('');
+  const [newMeetDuration, setNewMeetDuration] = useState(60);
+  const [newMeetType, setNewMeetType] = useState('voice');
+  // Settings form state
+  const [settingsTheme, setSettingsTheme] = useState('indigo');
+  const [settingsEmoji, setSettingsEmoji] = useState('📚');
+  const [settingsPrivate, setSettingsPrivate] = useState(false);
+  const [settingsAllowInvites, setSettingsAllowInvites] = useState(true);
   
   const [onlineCount, setOnlineCount] = useState(0);
   const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
@@ -439,6 +520,25 @@ export function CollaborationPage({ userProfile }) {
         setGroupVoicePeers(prev => prev.filter(p => p.socketId !== data.socketId));
     });
 
+    // --- Pomodoro Timer Listeners ---
+    socketRef.current.on("group_pomodoro_started", (data) => {
+        if (activeGroupIdRef.current && String(data.groupId) === String(activeGroupIdRef.current)) {
+            setPomodoro({ isRunning: true, timeLeft: data.timeLeft, duration: data.duration, phase: 'study' });
+        }
+    });
+
+    socketRef.current.on("group_pomodoro_tick", (data) => {
+        if (activeGroupIdRef.current && String(data.groupId) === String(activeGroupIdRef.current)) {
+            setPomodoro({ isRunning: data.isRunning, timeLeft: data.timeLeft, duration: data.duration, phase: data.phase });
+        }
+    });
+
+    socketRef.current.on("group_pomodoro_ended", (data) => {
+        if (activeGroupIdRef.current && String(data.groupId) === String(activeGroupIdRef.current)) {
+            setPomodoro(null);
+        }
+    });
+
     return () => {
         socketRef.current.disconnect();
     };
@@ -456,6 +556,19 @@ export function CollaborationPage({ userProfile }) {
     setIsFocusLinked(false);
     setFocusStartTime(null);
     setActiveFocusUsers([]);
+    
+    // Reset tab and feature data
+    setActiveTab('chat');
+    setPomodoro(null);
+    setLibraryNotes([]);
+    setGroupGoals([]);
+    setGroupMeets([]);
+
+    // Check active Pomodoro for this group
+    const ag = studyGroups.find(g => g.name === activeChannel);
+    if (ag && socketRef.current) {
+      socketRef.current.emit("check_group_pomodoro", { groupId: ag.id, groupName: ag.name });
+    }
   }, [activeChannel]);
 
   const startFocusLink = () => {
@@ -563,6 +676,162 @@ export function CollaborationPage({ userProfile }) {
       console.error("Failed to load messages", e);
     }
   };
+
+  // === NEW: Feature Data Loaders ===
+  const loadLibrary = async (groupId: number) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/collaboration/groups/${groupId}/library`);
+      if (res.ok) setLibraryNotes(await res.json());
+    } catch (e) { console.error("Failed to load library", e); }
+  };
+
+  const loadGoals = async (groupId: number) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/collaboration/groups/${groupId}/goals`);
+      if (res.ok) setGroupGoals(await res.json());
+    } catch (e) { console.error("Failed to load goals", e); }
+  };
+
+  const loadMeets = async (groupId: number) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/collaboration/groups/${groupId}/meets`);
+      if (res.ok) setGroupMeets(await res.json());
+    } catch (e) { console.error("Failed to load meets", e); }
+  };
+
+  // Load tab data when switching tabs
+  useEffect(() => {
+    const ag = studyGroups.find(g => g.name === activeChannel);
+    if (!ag) return;
+    if (activeTab === 'library') loadLibrary(ag.id);
+    else if (activeTab === 'goals') loadGoals(ag.id);
+    else if (activeTab === 'meets') loadMeets(ag.id);
+  }, [activeTab, activeChannel]);
+
+  // === Pomodoro Handlers ===
+  const startPomodoro = (duration: number) => {
+    const ag = studyGroups.find(g => g.name === activeChannel);
+    if (!ag || !socketRef.current) return;
+    socketRef.current.emit("start_group_pomodoro", {
+      groupId: ag.id,
+      groupName: ag.name,
+      duration,
+      userName: userProfile?.name
+    });
+  };
+
+  const stopPomodoro = () => {
+    const ag = studyGroups.find(g => g.name === activeChannel);
+    if (!ag || !socketRef.current) return;
+    socketRef.current.emit("stop_group_pomodoro", { groupId: ag.id, groupName: ag.name });
+  };
+
+  // === Library Handlers ===
+  const handleUnpinNote = async (noteId: number) => {
+    const ag = studyGroups.find(g => g.name === activeChannel);
+    if (!ag) return;
+    try {
+      await fetch(`${API_BASE_URL}/collaboration/groups/${ag.id}/library/${noteId}`, { method: 'DELETE' });
+      loadLibrary(ag.id);
+    } catch (e) { console.error("Failed to unpin note", e); }
+  };
+
+  // === Goal Handlers ===
+  const handleAddGoal = async () => {
+    const ag = studyGroups.find(g => g.name === activeChannel);
+    if (!ag || !newGoalTitle.trim()) return;
+    try {
+      await fetch(`${API_BASE_URL}/collaboration/groups/${ag.id}/goals`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: userProfile?.id, title: newGoalTitle, description: newGoalDesc, assignedTo: newGoalAssignee })
+      });
+      setNewGoalTitle(''); setNewGoalDesc(''); setNewGoalAssignee(null); setShowAddGoalModal(false);
+      loadGoals(ag.id);
+    } catch (e) { alert('Failed to add goal.'); }
+  };
+
+  const handleToggleGoal = async (goalId: number, completed: boolean) => {
+    const ag = studyGroups.find(g => g.name === activeChannel);
+    if (!ag) return;
+    try {
+      await fetch(`${API_BASE_URL}/collaboration/groups/${ag.id}/goals/${goalId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_completed: !completed })
+      });
+      loadGoals(ag.id);
+    } catch (e) { console.error("Failed to toggle goal", e); }
+  };
+
+  const handleDeleteGoal = async (goalId: number) => {
+    const ag = studyGroups.find(g => g.name === activeChannel);
+    if (!ag) return;
+    try {
+      await fetch(`${API_BASE_URL}/collaboration/groups/${ag.id}/goals/${goalId}`, { method: 'DELETE' });
+      loadGoals(ag.id);
+    } catch (e) { console.error("Failed to delete goal", e); }
+  };
+
+  // === Meet Handlers ===
+  const handleAddMeet = async () => {
+    const ag = studyGroups.find(g => g.name === activeChannel);
+    if (!ag || !newMeetTitle.trim() || !newMeetDate) return;
+    try {
+      await fetch(`${API_BASE_URL}/collaboration/groups/${ag.id}/meets`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: userProfile?.id, title: newMeetTitle, description: newMeetDesc, scheduledAt: newMeetDate, durationMinutes: newMeetDuration, meetType: newMeetType })
+      });
+      setNewMeetTitle(''); setNewMeetDesc(''); setNewMeetDate(''); setShowAddMeetModal(false);
+      loadMeets(ag.id);
+    } catch (e) { alert('Failed to schedule meet.'); }
+  };
+
+  const handleDeleteMeet = async (meetId: number) => {
+    const ag = studyGroups.find(g => g.name === activeChannel);
+    if (!ag) return;
+    try {
+      await fetch(`${API_BASE_URL}/collaboration/groups/${ag.id}/meets/${meetId}`, { method: 'DELETE' });
+      loadMeets(ag.id);
+    } catch (e) { console.error("Failed to delete meet", e); }
+  };
+
+  // === Group Settings Handlers ===
+  const handleSaveSettings = async () => {
+    const ag = studyGroups.find(g => g.name === activeChannel);
+    if (!ag) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/collaboration/groups/${ag.id}/settings`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requesterId: userProfile?.id, theme_color: settingsTheme, avatar_emoji: settingsEmoji, is_private: settingsPrivate, allow_member_invites: settingsAllowInvites })
+      });
+      if (res.ok) {
+        loadStudyGroups();
+        setShowSettingsModal(false);
+      } else {
+        const d = await res.json();
+        alert(d.error || 'Failed to save settings');
+      }
+    } catch (e) { alert('Failed to save settings.'); }
+  };
+
+  const handlePromoteMember = async (targetUserId: number, isAdmin: boolean) => {
+    const ag = studyGroups.find(g => g.name === activeChannel);
+    if (!ag) return;
+    try {
+      await fetch(`${API_BASE_URL}/collaboration/groups/${ag.id}/members/${targetUserId}/role`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requesterId: userProfile?.id, is_admin: isAdmin })
+      });
+      loadGroupMembers(ag.id);
+    } catch (e) { alert('Failed to update member role.'); }
+  };
+
+  // Get theme for active group
+  const activeTheme = THEME_COLORS[(studyGroups.find(g => g.name === activeChannel)?.theme_color || 'indigo')] || THEME_COLORS.indigo;
 
   const toggleVoiceCall = async () => {
       if (activeGroupCall === 'audio') {
@@ -1402,20 +1671,59 @@ export function CollaborationPage({ userProfile }) {
              {/* Chat Header */}
              {activeChannel ? (
                <div className="flex-1 flex flex-col h-full relative">
-                 <div className="h-16 px-6 bg-white/80 dark:bg-stone-900/80 backdrop-blur-md border-b border-stone-200 dark:border-stone-800 flex justify-between items-center z-20 shrink-0">
+                 <div className="h-16 px-6 bg-white/80 dark:bg-stone-900/80 backdrop-blur-md border-b border-stone-200 dark:border-stone-800 flex justify-between items-center z-20 shrink-0" style={{ borderBottomColor: activeTheme.primary + '30' }}>
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 font-bold flex items-center justify-center text-indigo-700 dark:text-indigo-300">
-                            {activeChannel.substring(0, 2).toUpperCase()}
+                        <div className="w-10 h-10 rounded-full font-bold flex items-center justify-center text-lg" style={{ background: activeTheme.light, color: activeTheme.text }}>
+                            {activeGroup?.avatar_emoji || activeChannel.substring(0, 2).toUpperCase()}
                         </div>
                     <div>
-                        <h3 className="font-bold text-stone-900 dark:text-white capitalize">{activeChannel}</h3>
+                        <h3 className="font-bold text-stone-900 dark:text-white capitalize flex items-center gap-2">
+                          {activeChannel}
+                          {activeGroup?.is_private && <Lock className="w-3.5 h-3.5 text-stone-400"/>}
+                        </h3>
                         <p className="text-xs text-stone-500 dark:text-stone-400 flex items-center gap-1">
                             <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span> Active Session
                         </p>
                     </div>
                 </div>
                 
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                    {/* Pomodoro Widget */}
+                    {pomodoro ? (
+                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border shadow-sm" style={{ borderColor: pomodoro.phase === 'study' ? activeTheme.primary + '40' : '#f43f5e40', background: pomodoro.phase === 'study' ? activeTheme.dark : 'rgba(244,63,94,0.1)' }}>
+                        <div className="relative w-6 h-6">
+                          <svg className="w-6 h-6 transform -rotate-90" viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" className="text-stone-200 dark:text-stone-700" strokeWidth="2.5"/>
+                            <circle cx="12" cy="12" r="10" fill="none" stroke={pomodoro.phase === 'study' ? activeTheme.primary : '#f43f5e'} strokeWidth="2.5" strokeLinecap="round"
+                              strokeDasharray={62.83} strokeDashoffset={62.83 * (1 - (pomodoro.timeLeft / (pomodoro.duration || 1)))}
+                              style={{ transition: 'stroke-dashoffset 1s linear' }}
+                            />
+                          </svg>
+                        </div>
+                        <span className="font-mono font-bold text-sm" style={{ color: pomodoro.phase === 'study' ? activeTheme.text : '#e11d48' }}>
+                          {Math.floor(pomodoro.timeLeft / 60).toString().padStart(2, '0')}:{(pomodoro.timeLeft % 60).toString().padStart(2, '0')}
+                        </span>
+                        <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: pomodoro.phase === 'study' ? activeTheme.text : '#e11d48' }}>
+                          {pomodoro.phase === 'study' ? '📚 Study' : '☕ Break'}
+                        </span>
+                        <button onClick={stopPomodoro} className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-full transition" title="Stop Timer">
+                          <Square className="w-3.5 h-3.5 text-red-500"/>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        {[25, 45, 60].map(d => (
+                          <button key={d} onClick={() => startPomodoro(d)}
+                            className="px-2 py-1 text-[11px] font-bold rounded-lg transition hover:shadow-sm"
+                            style={{ color: activeTheme.text, background: activeTheme.dark }}
+                            title={`Start ${d}min Pomodoro`}
+                          >
+                            <Timer className="w-3 h-3 inline mr-0.5"/>{d}m
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
                     <StudyTimer 
                         isActive={videoCallData.isActive && callAccepted} 
                         isLinked={isFocusLinked}
@@ -1448,17 +1756,50 @@ export function CollaborationPage({ userProfile }) {
                     )}
                     {isCreator && (
                         <button 
-                            onClick={() => setShowGroupAdminModal(true)} 
+                            onClick={() => {
+                              setSettingsTheme(activeGroup?.theme_color || 'indigo');
+                              setSettingsEmoji(activeGroup?.avatar_emoji || '📚');
+                              setSettingsPrivate(activeGroup?.is_private || false);
+                              setSettingsAllowInvites(activeGroup?.allow_member_invites !== false);
+                              setShowSettingsModal(true);
+                            }} 
                             className="p-2 text-stone-400 hover:text-stone-700 dark:hover:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-full transition" 
                             title="Group Settings"
                         >
                             <Settings className="w-5 h-5"/>
                         </button>
                     )}
-                    {/* Group Video Calling via Jitsi Meet */}
+                    <button onClick={() => setShowGroupAdminModal(true)} className="p-2 text-stone-400 hover:text-stone-700 dark:hover:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-full transition" title="Manage Members">
+                        <Users className="w-5 h-5"/>
+                    </button>
+                    {/* Group Calling Buttons */}
                     <button onClick={toggleVoiceCall} className={`p-2 rounded-full transition ${activeGroupCall === 'audio' ? 'text-emerald-500 bg-emerald-50 dark:bg-emerald-900/30' : 'text-stone-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20'}`} title="Toggle Group Audio Call"><Phone className="w-5 h-5"/></button>
                     <button onClick={toggleVideoCall} className={`p-2 rounded-full transition ${activeGroupCall === 'video' ? 'text-pink-500 bg-pink-50 dark:bg-pink-900/30' : 'text-stone-400 hover:text-pink-500 hover:bg-pink-50 dark:hover:bg-pink-900/20'}`} title="Toggle Group Video Call"><Video className="w-5 h-5"/></button>
                 </div>
+             </div>
+
+             {/* Tab Navigation Bar */}
+             <div className="flex items-center gap-1 px-4 py-2 bg-white/60 dark:bg-stone-900/60 backdrop-blur-sm border-b border-stone-200 dark:border-stone-800 shrink-0 z-15">
+               {([
+                 { key: 'chat', label: 'Chat', icon: MessageSquare },
+                 { key: 'library', label: 'Library', icon: BookOpen },
+                 { key: 'goals', label: 'Goals', icon: Target },
+                 { key: 'meets', label: 'Meets', icon: Calendar },
+               ] as const).map(tab => (
+                 <button
+                   key={tab.key}
+                   onClick={() => setActiveTab(tab.key)}
+                   className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                     activeTab === tab.key
+                       ? 'text-white shadow-lg'
+                       : 'text-stone-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800'
+                   }`}
+                   style={activeTab === tab.key ? { background: activeTheme.primary, boxShadow: `0 4px 14px ${activeTheme.ring}` } : {}}
+                 >
+                   <tab.icon className="w-4 h-4"/>
+                   {tab.label}
+                 </button>
+               ))}
              </div>
 
              {/* Live Call Join Banner (shown when someone else started a call and you haven't joined) */}
@@ -1629,66 +1970,223 @@ export function CollaborationPage({ userProfile }) {
                  </div>
              )}
 
-             {/* Chat Messages */}
-             <div className="flex-1 overflow-y-auto p-6 space-y-6 z-10 scrollbar-hide">
-                 <div className="text-center py-4">
-                     <span className="bg-stone-200 dark:bg-stone-800/80 text-stone-500 dark:text-stone-400 text-xs px-3 py-1 rounded-full border border-stone-300 dark:border-stone-700 backdrop-blur-sm shadow-sm">
-                         This is the start of the #{activeChannel} chat.
-                     </span>
-                 </div>
-                 {channelMessages.map((msg, idx) => {
-                     const isMine = msg.user === userProfile?.name;
-                     return (
-                         <div key={msg.id || idx} className={`flex ${isMine ? 'justify-end' : 'justify-start'} animate-fade-in-up`}>
-                             <div className={`flex items-end max-w-[75%] gap-2 ${isMine ? 'flex-row-reverse' : ''}`}>
-                                 {!isMine && (
-                                     <div className="w-7 h-7 bg-gradient-to-br from-purple-100 to-indigo-100 dark:from-purple-900/50 dark:to-indigo-900/50 border border-purple-200 dark:border-purple-800 rounded-full flex items-center justify-center text-xs font-bold text-purple-700 dark:text-purple-300 shadow-sm shrink-0">
-                                         {msg.avatar}
-                                     </div>
-                                 )}
-                                 <div className={`flex flex-col ${isMine ? 'items-end' : 'items-start'}`}>
-                                     {!isMine && <span className="text-xs text-stone-500 dark:text-stone-400 mb-1 ml-1 font-medium">{msg.user}</span>}
-                                     <div className={`p-3 rounded-2xl shadow-sm text-sm ${isMine ? 'bg-indigo-600 text-white rounded-br-sm shadow-indigo-500/20' : 'bg-white dark:bg-stone-800 text-stone-800 dark:text-stone-200 border border-stone-200 dark:border-stone-700 rounded-bl-sm'}`}>
-                                        {msg.type === 'file' ? (
-                                            <div className="flex items-center gap-2 font-medium cursor-pointer hover:underline opacity-90">
-                                               <File className="w-4 h-4" /> {msg.fileName}
-                                            </div>
-                                        ) : (
-                                            msg.message
-                                        )}
-                                     </div>
-                                     <span className="text-[10px] text-stone-400 mt-1 mx-1">{msg.time}</span>
-                                 </div>
-                             </div>
-                         </div>
-                     );
-                 })}
-                 <div ref={messagesEndRef} className="h-4"></div>
-             </div>
-
-             {/* Input Area */}
-             <div className="p-4 bg-white/80 dark:bg-stone-900/80 backdrop-blur-md border-t border-stone-200 dark:border-stone-800 z-20 shrink-0">
-                 <div className="flex items-center gap-2 bg-stone-100 dark:bg-stone-950/50 rounded-full border border-stone-200 dark:border-stone-800 px-2 py-1 shadow-inner">
-                    <button onClick={handleFileUpload} className="p-2 text-stone-400 hover:text-indigo-600 hover:bg-stone-200 dark:hover:bg-stone-800 rounded-full transition shrink-0" title="Attach file">
-                        <Paperclip className="w-5 h-5" />
-                    </button>
-                    <input
-                        type="text"
-                        value={newMessage}
-                        onChange={(e) => setNewMessage(e.target.value)}
-                        onKeyPress={(e) => e.key === "Enter" && handleSend()}
-                        placeholder={`Message #${activeChannel}...`}
-                        className="flex-1 bg-transparent border-none focus:outline-none focus:ring-0 text-sm py-3 px-2 text-stone-800 dark:text-stone-200 placeholder-stone-400"
-                    />
-                    <button 
-                        onClick={handleSend}
-                        disabled={!newMessage.trim()}
-                        className="p-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full transition disabled:opacity-50 shrink-0 shadow-md shadow-indigo-500/20 flex items-center justify-center h-10 w-10"
-                    >
-                        <Send className="w-4 h-4 ml-0.5" />
-                    </button>
-                 </div>
+             {/* === TAB CONTENT === */}
+             
+             {/* Chat Tab */}
+             {activeTab === 'chat' && (
+              <>
+              {/* Chat Messages */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-6 z-10 scrollbar-hide">
+                  <div className="text-center py-4">
+                      <span className="bg-stone-200 dark:bg-stone-800/80 text-stone-500 dark:text-stone-400 text-xs px-3 py-1 rounded-full border border-stone-300 dark:border-stone-700 backdrop-blur-sm shadow-sm">
+                          This is the start of the #{activeChannel} chat.
+                      </span>
+                  </div>
+                  {channelMessages.map((msg, idx) => {
+                      const isMine = msg.user === userProfile?.name;
+                      return (
+                          <div key={msg.id || idx} className={`flex ${isMine ? 'justify-end' : 'justify-start'} animate-fade-in-up`}>
+                              <div className={`flex items-end max-w-[75%] gap-2 ${isMine ? 'flex-row-reverse' : ''}`}>
+                                  {!isMine && (
+                                      <div className="w-7 h-7 bg-gradient-to-br from-purple-100 to-indigo-100 dark:from-purple-900/50 dark:to-indigo-900/50 border border-purple-200 dark:border-purple-800 rounded-full flex items-center justify-center text-xs font-bold text-purple-700 dark:text-purple-300 shadow-sm shrink-0">
+                                          {msg.avatar}
+                                      </div>
+                                  )}
+                                  <div className={`flex flex-col ${isMine ? 'items-end' : 'items-start'}`}>
+                                      {!isMine && <span className="text-xs text-stone-500 dark:text-stone-400 mb-1 ml-1 font-medium">{msg.user}</span>}
+                                      <div className={`p-3 rounded-2xl shadow-sm text-sm ${isMine ? 'text-white rounded-br-sm' : 'bg-white dark:bg-stone-800 text-stone-800 dark:text-stone-200 border border-stone-200 dark:border-stone-700 rounded-bl-sm'}`}
+                                        style={isMine ? { background: activeTheme.primary, boxShadow: `0 2px 8px ${activeTheme.ring}` } : {}}
+                                      >
+                                         {msg.type === 'file' ? (
+                                             <div className="flex items-center gap-2 font-medium cursor-pointer hover:underline opacity-90">
+                                                <File className="w-4 h-4" /> {msg.fileName}
+                                             </div>
+                                         ) : (
+                                             msg.message
+                                         )}
+                                      </div>
+                                      <span className="text-[10px] text-stone-400 mt-1 mx-1">{msg.time}</span>
+                                  </div>
+                              </div>
+                          </div>
+                      );
+                  })}
+                  <div ref={messagesEndRef} className="h-4"></div>
               </div>
+
+              {/* Input Area */}
+              <div className="p-4 bg-white/80 dark:bg-stone-900/80 backdrop-blur-md border-t border-stone-200 dark:border-stone-800 z-20 shrink-0">
+                  <div className="flex items-center gap-2 bg-stone-100 dark:bg-stone-950/50 rounded-full border border-stone-200 dark:border-stone-800 px-2 py-1 shadow-inner" style={{ borderColor: activeTheme.ring }}>
+                     <button onClick={handleFileUpload} className="p-2 text-stone-400 hover:text-indigo-600 hover:bg-stone-200 dark:hover:bg-stone-800 rounded-full transition shrink-0" title="Attach file">
+                         <Paperclip className="w-5 h-5" />
+                     </button>
+                     <input
+                         type="text"
+                         value={newMessage}
+                         onChange={(e) => setNewMessage(e.target.value)}
+                         onKeyPress={(e) => e.key === "Enter" && handleSend()}
+                         placeholder={`Message #${activeChannel}...`}
+                         className="flex-1 bg-transparent border-none focus:outline-none focus:ring-0 text-sm py-3 px-2 text-stone-800 dark:text-stone-200 placeholder-stone-400"
+                     />
+                     <button 
+                         onClick={handleSend}
+                         disabled={!newMessage.trim()}
+                         className="p-2.5 text-white rounded-full transition disabled:opacity-50 shrink-0 shadow-md flex items-center justify-center h-10 w-10"
+                         style={{ background: activeTheme.primary, boxShadow: `0 4px 14px ${activeTheme.ring}` }}
+                     >
+                         <Send className="w-4 h-4 ml-0.5" />
+                     </button>
+                  </div>
+               </div>
+              </>
+             )}
+
+             {/* Library Tab */}
+             {activeTab === 'library' && (
+              <div className="flex-1 overflow-y-auto p-6 z-10">
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h3 className="text-lg font-bold text-stone-900 dark:text-white flex items-center gap-2"><BookOpen className="w-5 h-5" style={{ color: activeTheme.primary }}/> Shared Library</h3>
+                    <p className="text-xs text-stone-500 mt-1">Pinned notes shared by group members</p>
+                  </div>
+                </div>
+                {libraryNotes.length === 0 ? (
+                  <div className="text-center py-16">
+                    <BookOpen className="w-12 h-12 mx-auto mb-3 opacity-20 text-stone-400"/>
+                    <p className="text-stone-500 text-sm">No pinned notes yet.</p>
+                    <p className="text-stone-400 text-xs mt-1">Pin notes from your Notes page to share with the group.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {libraryNotes.map(note => (
+                      <div key={note.id} className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl p-4 shadow-sm hover:shadow-md transition group">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: activeTheme.light }}>
+                            <Pin className="w-4 h-4" style={{ color: activeTheme.primary }}/>
+                          </div>
+                          <button onClick={() => handleUnpinNote(note.note_id)} className="p-1.5 text-stone-400 hover:text-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition opacity-0 group-hover:opacity-100">
+                            <Trash2 className="w-3.5 h-3.5"/>
+                          </button>
+                        </div>
+                        <h4 className="font-bold text-sm text-stone-900 dark:text-white truncate">{note.title}</h4>
+                        {note.subject && <span className="text-[10px] font-medium px-2 py-0.5 rounded-full mt-1 inline-block" style={{ background: activeTheme.light, color: activeTheme.text }}>{note.subject}</span>}
+                        <p className="text-[10px] text-stone-400 mt-2">Pinned by {note.pinned_by_name} · {new Date(note.pinned_at).toLocaleDateString()}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+             )}
+
+             {/* Goals Tab */}
+             {activeTab === 'goals' && (
+              <div className="flex-1 overflow-y-auto p-6 z-10">
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h3 className="text-lg font-bold text-stone-900 dark:text-white flex items-center gap-2"><Target className="w-5 h-5" style={{ color: activeTheme.primary }}/> Study Goals</h3>
+                    <p className="text-xs text-stone-500 mt-1">{groupGoals.filter(g => g.is_completed).length}/{groupGoals.length} completed</p>
+                  </div>
+                  <button onClick={() => setShowAddGoalModal(true)} className="flex items-center gap-1.5 px-4 py-2 text-white text-sm font-semibold rounded-xl shadow-lg transition hover:shadow-xl" style={{ background: activeTheme.primary, boxShadow: `0 4px 14px ${activeTheme.ring}` }}>
+                    <Plus className="w-4 h-4"/> Add Goal
+                  </button>
+                </div>
+                {/* Progress Bar */}
+                {groupGoals.length > 0 && (
+                  <div className="mb-6">
+                    <div className="h-2 bg-stone-200 dark:bg-stone-800 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full transition-all duration-500" style={{ width: `${(groupGoals.filter(g => g.is_completed).length / groupGoals.length) * 100}%`, background: activeTheme.primary }}/>
+                    </div>
+                  </div>
+                )}
+                {groupGoals.length === 0 ? (
+                  <div className="text-center py-16">
+                    <Target className="w-12 h-12 mx-auto mb-3 opacity-20 text-stone-400"/>
+                    <p className="text-stone-500 text-sm">No study goals yet.</p>
+                    <p className="text-stone-400 text-xs mt-1">Create collaborative tasks for your group.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {groupGoals.map(goal => (
+                      <div key={goal.id} className={`flex items-center gap-3 p-4 rounded-xl border transition group ${goal.is_completed ? 'bg-stone-50 dark:bg-stone-900/30 border-stone-200 dark:border-stone-800 opacity-60' : 'bg-white dark:bg-stone-900 border-stone-200 dark:border-stone-800 hover:shadow-sm'}`}>
+                        <button onClick={() => handleToggleGoal(goal.id, goal.is_completed)} className="shrink-0">
+                          {goal.is_completed
+                            ? <CheckCircle2 className="w-6 h-6" style={{ color: activeTheme.primary }}/>
+                            : <Circle className="w-6 h-6 text-stone-300 dark:text-stone-600 hover:text-stone-500 transition"/>
+                          }
+                        </button>
+                        <div className="flex-1 min-w-0">
+                          <h4 className={`font-semibold text-sm ${goal.is_completed ? 'line-through text-stone-400' : 'text-stone-900 dark:text-white'}`}>{goal.title}</h4>
+                          {goal.description && <p className="text-xs text-stone-500 mt-0.5 truncate">{goal.description}</p>}
+                          <div className="flex items-center gap-2 mt-1.5">
+                            {goal.assigned_name && (
+                              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full" style={{ background: activeTheme.light, color: activeTheme.text }}>
+                                👤 {goal.assigned_name}
+                              </span>
+                            )}
+                            <span className="text-[10px] text-stone-400">{new Date(goal.created_at).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+                        <button onClick={() => handleDeleteGoal(goal.id)} className="p-1.5 text-stone-400 hover:text-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition opacity-0 group-hover:opacity-100 shrink-0">
+                          <Trash2 className="w-3.5 h-3.5"/>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+             )}
+
+             {/* Meets Tab */}
+             {activeTab === 'meets' && (
+              <div className="flex-1 overflow-y-auto p-6 z-10">
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h3 className="text-lg font-bold text-stone-900 dark:text-white flex items-center gap-2"><Calendar className="w-5 h-5" style={{ color: activeTheme.primary }}/> Study Meets</h3>
+                    <p className="text-xs text-stone-500 mt-1">Upcoming study sessions</p>
+                  </div>
+                  <button onClick={() => setShowAddMeetModal(true)} className="flex items-center gap-1.5 px-4 py-2 text-white text-sm font-semibold rounded-xl shadow-lg transition hover:shadow-xl" style={{ background: activeTheme.primary, boxShadow: `0 4px 14px ${activeTheme.ring}` }}>
+                    <Plus className="w-4 h-4"/> Schedule Meet
+                  </button>
+                </div>
+                {groupMeets.length === 0 ? (
+                  <div className="text-center py-16">
+                    <Calendar className="w-12 h-12 mx-auto mb-3 opacity-20 text-stone-400"/>
+                    <p className="text-stone-500 text-sm">No upcoming meets.</p>
+                    <p className="text-stone-400 text-xs mt-1">Schedule a voice or video study session.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {groupMeets.map(meet => {
+                      const dt = new Date(meet.scheduled_at);
+                      const isToday = dt.toDateString() === new Date().toDateString();
+                      return (
+                        <div key={meet.id} className="flex items-center gap-4 p-4 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl hover:shadow-sm transition group">
+                          <div className="w-14 h-14 rounded-xl flex flex-col items-center justify-center shrink-0" style={{ background: activeTheme.light }}>
+                            <span className="text-[10px] font-bold uppercase" style={{ color: activeTheme.text }}>{dt.toLocaleDateString('en', { month: 'short' })}</span>
+                            <span className="text-lg font-black leading-tight" style={{ color: activeTheme.text }}>{dt.getDate()}</span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-bold text-sm text-stone-900 dark:text-white flex items-center gap-2">
+                              {meet.title}
+                              {isToday && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 animate-pulse">TODAY</span>}
+                            </h4>
+                            {meet.description && <p className="text-xs text-stone-500 truncate mt-0.5">{meet.description}</p>}
+                            <div className="flex items-center gap-3 mt-1.5">
+                              <span className="text-[10px] font-medium text-stone-500 flex items-center gap-1"><Clock className="w-3 h-3"/>{dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                              <span className="text-[10px] font-medium text-stone-500">{meet.duration_minutes}min</span>
+                              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full" style={{ background: activeTheme.light, color: activeTheme.text }}>{meet.meet_type === 'video' ? '📹 Video' : '🔊 Voice'}</span>
+                            </div>
+                          </div>
+                          <button onClick={() => handleDeleteMeet(meet.id)} className="p-1.5 text-stone-400 hover:text-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition opacity-0 group-hover:opacity-100 shrink-0">
+                            <Trash2 className="w-3.5 h-3.5"/>
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+             )}
              </div>
              ) : (
                 <div className="h-full flex flex-col items-center justify-center text-stone-400">
@@ -1962,6 +2460,170 @@ export function CollaborationPage({ userProfile }) {
                   </button>
               </div>
 
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Goal Modal */}
+      {showAddGoalModal && (
+        <div className="fixed inset-0 bg-stone-900/60 backdrop-blur-sm flex items-center justify-center z-[150] p-4">
+          <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-2xl p-6 w-full max-w-md shadow-2xl animate-fade-in-up">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-stone-900 dark:text-white flex items-center gap-2"><Target className="w-5 h-5" style={{ color: activeTheme.primary }}/> Add Study Goal</h3>
+              <button onClick={() => setShowAddGoalModal(false)} className="text-stone-400 hover:text-stone-600"><X className="w-5 h-5"/></button>
+            </div>
+            <div className="space-y-3">
+              <input type="text" value={newGoalTitle} onChange={e => setNewGoalTitle(e.target.value)} placeholder="Goal title *" className="w-full px-4 py-3 bg-stone-50 dark:bg-stone-950/50 border border-stone-200 dark:border-stone-800 rounded-xl focus:outline-none focus:ring-2 text-sm" style={{ '--tw-ring-color': activeTheme.ring } as any}/>
+              <textarea value={newGoalDesc} onChange={e => setNewGoalDesc(e.target.value)} placeholder="Description (optional)" rows={2} className="w-full px-4 py-3 bg-stone-50 dark:bg-stone-950/50 border border-stone-200 dark:border-stone-800 rounded-xl focus:outline-none focus:ring-2 text-sm resize-none" style={{ '--tw-ring-color': activeTheme.ring } as any}/>
+              <select value={newGoalAssignee || ''} onChange={e => setNewGoalAssignee(e.target.value ? Number(e.target.value) : null)} className="w-full px-4 py-3 bg-stone-50 dark:bg-stone-950/50 border border-stone-200 dark:border-stone-800 rounded-xl focus:outline-none text-sm text-stone-700 dark:text-stone-300">
+                <option value="">Assign to... (optional)</option>
+                {groupMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button onClick={() => setShowAddGoalModal(false)} className="flex-1 px-4 py-2.5 bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 rounded-xl hover:bg-stone-200 dark:hover:bg-stone-700 transition font-medium">Cancel</button>
+              <button onClick={handleAddGoal} disabled={!newGoalTitle.trim()} className="flex-1 px-4 py-2.5 text-white rounded-xl shadow-lg transition font-semibold disabled:opacity-50" style={{ background: activeTheme.primary }}>Add Goal</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Meet Modal */}
+      {showAddMeetModal && (
+        <div className="fixed inset-0 bg-stone-900/60 backdrop-blur-sm flex items-center justify-center z-[150] p-4">
+          <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-2xl p-6 w-full max-w-md shadow-2xl animate-fade-in-up">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-stone-900 dark:text-white flex items-center gap-2"><Calendar className="w-5 h-5" style={{ color: activeTheme.primary }}/> Schedule Study Meet</h3>
+              <button onClick={() => setShowAddMeetModal(false)} className="text-stone-400 hover:text-stone-600"><X className="w-5 h-5"/></button>
+            </div>
+            <div className="space-y-3">
+              <input type="text" value={newMeetTitle} onChange={e => setNewMeetTitle(e.target.value)} placeholder="Meet title *" className="w-full px-4 py-3 bg-stone-50 dark:bg-stone-950/50 border border-stone-200 dark:border-stone-800 rounded-xl focus:outline-none focus:ring-2 text-sm"/>
+              <textarea value={newMeetDesc} onChange={e => setNewMeetDesc(e.target.value)} placeholder="Description (optional)" rows={2} className="w-full px-4 py-3 bg-stone-50 dark:bg-stone-950/50 border border-stone-200 dark:border-stone-800 rounded-xl focus:outline-none focus:ring-2 text-sm resize-none"/>
+              <input type="datetime-local" value={newMeetDate} onChange={e => setNewMeetDate(e.target.value)} className="w-full px-4 py-3 bg-stone-50 dark:bg-stone-950/50 border border-stone-200 dark:border-stone-800 rounded-xl focus:outline-none text-sm text-stone-700 dark:text-stone-300"/>
+              <div className="flex gap-3">
+                <select value={newMeetDuration} onChange={e => setNewMeetDuration(Number(e.target.value))} className="flex-1 px-4 py-3 bg-stone-50 dark:bg-stone-950/50 border border-stone-200 dark:border-stone-800 rounded-xl focus:outline-none text-sm text-stone-700 dark:text-stone-300">
+                  <option value={30}>30 min</option>
+                  <option value={60}>1 hour</option>
+                  <option value={90}>1.5 hours</option>
+                  <option value={120}>2 hours</option>
+                </select>
+                <select value={newMeetType} onChange={e => setNewMeetType(e.target.value)} className="flex-1 px-4 py-3 bg-stone-50 dark:bg-stone-950/50 border border-stone-200 dark:border-stone-800 rounded-xl focus:outline-none text-sm text-stone-700 dark:text-stone-300">
+                  <option value="voice">🔊 Voice</option>
+                  <option value="video">📹 Video</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button onClick={() => setShowAddMeetModal(false)} className="flex-1 px-4 py-2.5 bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 rounded-xl hover:bg-stone-200 dark:hover:bg-stone-700 transition font-medium">Cancel</button>
+              <button onClick={handleAddMeet} disabled={!newMeetTitle.trim() || !newMeetDate} className="flex-1 px-4 py-2.5 text-white rounded-xl shadow-lg transition font-semibold disabled:opacity-50" style={{ background: activeTheme.primary }}>Schedule</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Group Settings Modal */}
+      {showSettingsModal && activeGroup && (
+        <div className="fixed inset-0 bg-stone-900/60 backdrop-blur-sm flex items-center justify-center z-[150] p-4">
+          <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-2xl w-full max-w-lg shadow-2xl animate-fade-in-up overflow-hidden">
+            <div className="px-6 py-4 flex justify-between items-center border-b border-stone-100 dark:border-stone-800" style={{ background: activeTheme.dark }}>
+              <h2 className="text-xl font-bold text-stone-900 dark:text-white flex items-center gap-2">
+                <Palette className="w-5 h-5" style={{ color: activeTheme.primary }}/> Group Customization
+              </h2>
+              <button onClick={() => setShowSettingsModal(false)} className="p-2 text-stone-400 hover:text-stone-700 dark:hover:text-stone-300 rounded-full hover:bg-stone-200 dark:hover:bg-stone-800 transition"><X className="w-5 h-5"/></button>
+            </div>
+            <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
+              {/* Theme Color */}
+              <div>
+                <h3 className="text-sm font-semibold text-stone-900 dark:text-white mb-3 uppercase tracking-wide">Theme Color</h3>
+                <div className="flex gap-3 flex-wrap">
+                  {Object.entries(THEME_COLORS).map(([key, val]) => (
+                    <button key={key} onClick={() => setSettingsTheme(key)}
+                      className={`w-10 h-10 rounded-xl transition-all ${settingsTheme === key ? 'ring-2 ring-offset-2 scale-110' : 'hover:scale-105'}`}
+                      style={{ background: val.primary, '--tw-ring-color': val.primary } as any}
+                      title={key}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Emoji Avatar */}
+              <div>
+                <h3 className="text-sm font-semibold text-stone-900 dark:text-white mb-3 uppercase tracking-wide">Group Emoji</h3>
+                <div className="flex gap-2 flex-wrap">
+                  {EMOJI_OPTIONS.map(em => (
+                    <button key={em} onClick={() => setSettingsEmoji(em)}
+                      className={`w-10 h-10 text-xl rounded-xl flex items-center justify-center transition-all ${settingsEmoji === em ? 'ring-2 ring-offset-2 scale-110 bg-stone-100 dark:bg-stone-800' : 'hover:bg-stone-100 dark:hover:bg-stone-800 hover:scale-105'}`}
+                      style={settingsEmoji === em ? { '--tw-ring-color': activeTheme.primary } as any : {}}
+                    >
+                      {em}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Privacy & Permissions */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-stone-900 dark:text-white uppercase tracking-wide">Privacy & Permissions</h3>
+                <div className="flex items-center justify-between p-3 bg-stone-50 dark:bg-stone-800/50 rounded-xl border border-stone-200 dark:border-stone-800">
+                  <div className="flex items-center gap-3">
+                    {settingsPrivate ? <Lock className="w-5 h-5 text-amber-500"/> : <Unlock className="w-5 h-5 text-green-500"/>}
+                    <div>
+                      <p className="text-sm font-medium text-stone-900 dark:text-white">{settingsPrivate ? 'Private Group' : 'Public Group'}</p>
+                      <p className="text-[10px] text-stone-500">{settingsPrivate ? 'Only invited members can join' : 'Anyone can discover and join'}</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setSettingsPrivate(!settingsPrivate)} className={`w-11 h-6 rounded-full transition-colors relative ${settingsPrivate ? '' : 'bg-stone-300 dark:bg-stone-600'}`} style={settingsPrivate ? { background: activeTheme.primary } : {}}>
+                    <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${settingsPrivate ? 'translate-x-5' : 'translate-x-0.5'}`}/>
+                  </button>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-stone-50 dark:bg-stone-800/50 rounded-xl border border-stone-200 dark:border-stone-800">
+                  <div className="flex items-center gap-3">
+                    <Users className="w-5 h-5" style={{ color: activeTheme.primary }}/>
+                    <div>
+                      <p className="text-sm font-medium text-stone-900 dark:text-white">Member Invites</p>
+                      <p className="text-[10px] text-stone-500">{settingsAllowInvites ? 'All members can invite' : 'Only admins can invite'}</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setSettingsAllowInvites(!settingsAllowInvites)} className={`w-11 h-6 rounded-full transition-colors relative ${settingsAllowInvites ? '' : 'bg-stone-300 dark:bg-stone-600'}`} style={settingsAllowInvites ? { background: activeTheme.primary } : {}}>
+                    <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${settingsAllowInvites ? 'translate-x-5' : 'translate-x-0.5'}`}/>
+                  </button>
+                </div>
+              </div>
+
+              {/* Member Roles */}
+              <div>
+                <h3 className="text-sm font-semibold text-stone-900 dark:text-white mb-3 uppercase tracking-wide flex items-center gap-2">
+                  <Crown className="w-4 h-4 text-amber-500"/> Member Roles
+                </h3>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {groupMembers.map(m => (
+                    <div key={m.id} className="flex items-center justify-between p-2.5 rounded-xl bg-stone-50 dark:bg-stone-800/50 border border-stone-100 dark:border-stone-800">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: activeTheme.light, color: activeTheme.text }}>{m.name?.[0]}</div>
+                        <div>
+                          <span className="text-sm font-medium text-stone-900 dark:text-white">{m.name}</span>
+                          {m.id === activeGroup.creator_id && <span className="ml-1.5 text-[10px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 rounded">Owner</span>}
+                          {m.is_admin && m.id !== activeGroup.creator_id && <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ color: activeTheme.text, background: activeTheme.light }}>Admin</span>}
+                        </div>
+                      </div>
+                      {m.id !== activeGroup.creator_id && isCreator && (
+                        <button onClick={() => handlePromoteMember(m.id, !m.is_admin)}
+                          className="text-[10px] font-bold px-2.5 py-1 rounded-lg transition"
+                          style={m.is_admin ? { color: '#dc2626', background: 'rgba(220,38,38,0.1)' } : { color: activeTheme.text, background: activeTheme.light }}
+                        >
+                          {m.is_admin ? 'Remove Admin' : '+ Make Admin'}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            {/* Save */}
+            <div className="px-6 py-4 border-t border-stone-100 dark:border-stone-800 flex gap-3">
+              <button onClick={() => setShowSettingsModal(false)} className="flex-1 px-4 py-2.5 bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 rounded-xl hover:bg-stone-200 dark:hover:bg-stone-700 transition font-medium">Cancel</button>
+              <button onClick={handleSaveSettings} className="flex-1 px-4 py-2.5 text-white rounded-xl shadow-lg transition font-semibold" style={{ background: activeTheme.primary, boxShadow: `0 4px 14px ${activeTheme.ring}` }}>Save Changes</button>
             </div>
           </div>
         </div>
