@@ -1084,7 +1084,7 @@ export function CollaborationPage({ userProfile }) {
              </div>
 
              {/* Group Call Interface Overlay (Jitsi) */}
-             {activeGroupCall && selectedChat?.type === 'group' && (
+             {activeGroupCall && activeGroup && (
                  <div className="bg-stone-900 border-b border-stone-800 flex gap-0 shrink-0 shadow-xl overflow-hidden animate-fade-in z-10 transition-all h-[400px] relative">
                      <div className="absolute top-2 left-2 px-2 py-1 bg-black/60 text-white text-xs rounded uppercase tracking-wider z-20 font-bold backdrop-blur-sm shadow flex items-center gap-2">
                         <span className="animate-pulse w-2 h-2 bg-red-500 rounded-full" />
@@ -1095,7 +1095,7 @@ export function CollaborationPage({ userProfile }) {
                      </button>
                      <iframe 
                         allow="camera; microphone; display-capture; autoplay; clipboard-write"
-                        src={`https://meet.jit.si/NoteHub-Group-${selectedChat.id}#config.prejoinPageEnabled=false&userInfo.displayName="${encodeURIComponent(userProfile?.name || 'Student')}"`}
+                        src={`https://meet.jit.si/NoteHub-Group-${activeGroup.id}#config.prejoinPageEnabled=false&userInfo.displayName="${encodeURIComponent(userProfile?.name || 'Student')}"`}
                         className="w-full h-full border-0"
                      />
                  </div>
