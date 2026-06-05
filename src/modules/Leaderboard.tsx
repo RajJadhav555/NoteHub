@@ -263,26 +263,33 @@ export function GamificationPage({ leaderboard: initialLeaderboard, userProfile,
                     }`}
                   >
                       <div className="flex items-center space-x-4">
-                        <div
-                          className={`w-8 h-8 rounded-full text-sm font-bold flex items-center justify-center shrink-0 ${getRankRingStyle(index)}`}
-                        >
-                          {user.rank}
+                        <div className="relative">
+                          <div
+                            className={`w-8 h-8 rounded-full text-sm font-bold flex items-center justify-center shrink-0 ${getRankRingStyle(index)}`}
+                          >
+                            {user.rank}
+                          </div>
+                          {user.name !== userProfile.name && (
+                            <div className="absolute -bottom-1 -right-1">
+                              {user.is_online ? (
+                                <span className="relative flex h-3.5 w-3.5" title="Online">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-3.5 w-3.5 border-2 border-white dark:border-stone-900 bg-green-500"></span>
+                                </span>
+                              ) : (
+                                <span className="relative flex h-3.5 w-3.5" title="Offline">
+                                  <span className="relative inline-flex rounded-full h-3.5 w-3.5 border-2 border-white dark:border-stone-900 bg-red-500"></span>
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
                         <div>
                           <div className={`font-semibold text-stone-900 dark:text-white flex items-center gap-2 ${user.department === departmentWar.winningDepartment && departmentWar.winningDepartment ? 'flare-glow-text' : ''}`}>
                             {user.name}
                             {user.department === departmentWar.winningDepartment && departmentWar.winningDepartment && <Crown className="w-4 h-4 text-yellow-500 inline-block" />}
-                            {user.name === userProfile.name ? (
+                            {user.name === userProfile.name && (
                                 <span className="text-xs text-indigo-500 font-bold tracking-wide">(You)</span>
-                            ) : user.is_online ? (
-                                <span className="relative flex h-2.5 w-2.5" title="Online">
-                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
-                                </span>
-                            ) : (
-                                <span className="relative flex h-2 w-2" title="Offline">
-                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500 opacity-80"></span>
-                                </span>
                             )}
                           </div>
                           <div className="text-xs text-stone-500">
