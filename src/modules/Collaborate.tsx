@@ -302,6 +302,35 @@ export function CollaborationPage({ userProfile }) {
         }
     });
 
+    socketRef.current.on("call_rejected", () => {
+        handleEndCall();
+        alert("The user declined your call.");
+    });
+
+    socketRef.current.on("call_cancelled", (data) => {
+        if (incomingCall && callerId === data.from) {
+            setIncomingCall(false);
+            setCallerName("");
+            setCallerSignal(null);
+            setCallerId("");
+        }
+    });
+
+    socketRef.current.on("call_ended", () => {
+        handleEndCall();
+    });
+
+    socketRef.current.on("group_voice_started", (data) => {
+        setChannelMessages((prev) => [...prev, {
+            id: Date.now(),
+            user: "System",
+            message: `🔊 ${data.userName} has started a Voice Channel! Click the phone icon at the top to join.`,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            avatar: "🤖",
+            type: 'text'
+        }]);
+    });
+
     // --- Group WebRTC Voice Mesh Listeners ---
     socketRef.current.on("group_voice_user_joined", (data) => {
         console.log("Group Voice: User Joined", data);
@@ -529,7 +558,8 @@ export function CollaborationPage({ userProfile }) {
                   socketRef.current.emit("join_group_voice", {
                       groupId: activeGroup.id,
                       userId: userProfile?.id,
-                      userName: userProfile?.name
+                      userName: userProfile?.name,
+                      groupName: activeGroup.name
                   });
               }
           } catch (err) {
@@ -718,17 +748,50 @@ export function CollaborationPage({ userProfile }) {
       connectionRef.current = peer;
   };
 
-  const rejectCall = () => setIncomingCall(false);
+  const rejectCall = () => {
+      socketRef.current.emit("reject_1on1_call", { to: callerId });
+      setIncomingCall(false);
+      setCallerName("");
+      setCallerSignal(null);
+      setCallerId("");
+  };
+
+  const cancelCall = () => {
+      socketRef.current.emit("cancel_1on1_call", { to: videoCallData.userToCall });
+      handleEndCall();
+  };
 
   const handleEndCall = () => {
+      if (videoCallData.userToCall && callAccepted) {
+          socketRef.current.emit("end_1on1_call", { to: videoCallData.userToCall });
+      } else if (callerId && callAccepted) {
+          socketRef.current.emit("end_1on1_call", { to: callerId });
+      }
+      
       setCallAccepted(false);
       setVideoCallData({ isActive: false, initiator: false, userToCall: null, signal: null });
-      if (stream) {
-          stream.getTracks().forEach(track => track.stop());
-          setStream(null);
+      
+      setStream(prevStream => {
+          if (prevStream) {
+              prevStream.getTracks().forEach(track => {
+                  track.stop();
+                  track.enabled = false;
+              });
+          }
+          return null;
+      });
+      
+      if (localStreamRef.current) {
+          localStreamRef.current.getTracks().forEach(track => {
+              track.stop();
+              track.enabled = false;
+          });
+          localStreamRef.current = null;
       }
+      
       if (connectionRef.current) {
           connectionRef.current.destroy();
+          connectionRef.current = null;
       }
   };
 
@@ -1297,15 +1360,23 @@ export function CollaborationPage({ userProfile }) {
                      
                      {/* Call Controls Floating */}
                      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex items-center gap-3 bg-stone-900/80 backdrop-blur-md px-4 py-2 rounded-full border border-stone-700/50 shadow-2xl z-20">
-                         <button onClick={toggleMute} className={`p-3 rounded-full transition ${isMuted ? 'bg-red-500/90 text-white' : 'bg-stone-700/80 hover:bg-stone-600 text-stone-200'}`}>
-                             {isMuted ? <MicOff className="w-5 h-5"/> : <Mic className="w-5 h-5"/>}
-                         </button>
-                         <button onClick={toggleVideo} className={`p-3 rounded-full transition ${isVideoOff ? 'bg-red-500/90 text-white' : 'bg-stone-700/80 hover:bg-stone-600 text-stone-200'}`}>
-                             {isVideoOff ? <VideoOff className="w-5 h-5"/> : <Video className="w-5 h-5"/>}
-                         </button>
-                         <button onClick={handleEndCall} className="p-3 rounded-full bg-red-600 hover:bg-red-700 text-white transition shadow-lg shadow-red-500/20">
-                             <PhoneOff className="w-5 h-5"/>
-                         </button>
+                         {callAccepted ? (
+                             <>
+                                 <button onClick={toggleMute} className={`p-3 rounded-full transition ${isMuted ? 'bg-red-500/90 text-white' : 'bg-stone-700/80 hover:bg-stone-600 text-stone-200'}`}>
+                                     {isMuted ? <MicOff className="w-5 h-5"/> : <Mic className="w-5 h-5"/>}
+                                 </button>
+                                 <button onClick={toggleVideo} className={`p-3 rounded-full transition ${isVideoOff ? 'bg-red-500/90 text-white' : 'bg-stone-700/80 hover:bg-stone-600 text-stone-200'}`}>
+                                     {isVideoOff ? <VideoOff className="w-5 h-5"/> : <Video className="w-5 h-5"/>}
+                                 </button>
+                                 <button onClick={handleEndCall} className="p-3 rounded-full bg-red-600 hover:bg-red-700 text-white transition shadow-lg shadow-red-500/20" title="End Call">
+                                     <PhoneOff className="w-5 h-5"/>
+                                 </button>
+                             </>
+                         ) : (
+                             <button onClick={cancelCall} className="px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-medium transition shadow-lg shadow-red-500/20 flex items-center gap-2">
+                                 <PhoneOff className="w-4 h-4"/> Cancel Call
+                             </button>
+                         )}
                      </div>
                  </div>
              )}
