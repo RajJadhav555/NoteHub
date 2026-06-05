@@ -320,16 +320,7 @@ export function CollaborationPage({ userProfile }) {
         handleEndCall();
     });
 
-    socketRef.current.on("group_voice_started", (data) => {
-        setChannelMessages((prev) => [...prev, {
-            id: Date.now(),
-            user: "System",
-            message: `🔊 ${data.userName} has started a Voice Channel! Click the phone icon at the top to join.`,
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            avatar: "🤖",
-            type: 'text'
-        }]);
-    });
+    // Removed transient group_voice_started listener. It's now handled as a persistent message.
 
     // --- Group WebRTC Voice Mesh Listeners ---
     socketRef.current.on("group_voice_user_joined", (data) => {
@@ -561,6 +552,32 @@ export function CollaborationPage({ userProfile }) {
                       userName: userProfile?.name,
                       groupName: activeGroup.name
                   });
+                  
+                  // Broadcast persistent system message
+                  const msgText = `🔊 ${userProfile?.name} has started a Voice Channel! Click the phone icon at the top to join.`;
+                  const msgData = {
+                      room: activeGroup.name,
+                      user: "System",
+                      message: msgText,
+                      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                      avatar: "🤖",
+                      type: 'text'
+                  };
+                  socketRef.current.emit("send_message", msgData);
+                  try {
+                      fetch(`${API_BASE_URL}/messages/send`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                              userId: userProfile?.id || 0,
+                              userName: "System",
+                              message: msgText,
+                              groupName: activeGroup.name,
+                          }),
+                      });
+                  } catch (e) {
+                      console.error("Failed to save system voice message", e);
+                  }
               }
           } catch (err) {
               console.error("Failed to get microphone", err);
