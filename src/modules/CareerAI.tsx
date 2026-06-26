@@ -80,6 +80,7 @@ export function CareerGuidance({ userProfile }) {
   const [customWeeks, setCustomWeeks] = useState("");
   const [isGeneratingRoadmap, setIsGeneratingRoadmap] = useState(false);
   const [aiRoadmap, setAiRoadmap] = useState(null);
+  const [isDownloadingPDF, setIsDownloadingPDF] = useState(false);
 
   const clearChat = async () => {
     if (window.confirm("Are you sure you want to clear your AI Career Advisor chat history?")) {
@@ -293,14 +294,15 @@ export function CareerGuidance({ userProfile }) {
   };
 
   const downloadRoadmapPDF = async () => {
-    if (!roadmapRef.current) return;
+    if (!roadmapRef.current || isDownloadingPDF) return;
     
+    setIsDownloadingPDF(true);
     try {
       const originalOverflow = roadmapRef.current.style.overflow;
       roadmapRef.current.style.overflow = 'visible';
       
       const canvas = await html2canvas(roadmapRef.current, {
-        scale: 2,
+        scale: 1.5,
         useCORS: true,
         backgroundColor: '#ffffff',
         windowWidth: roadmapRef.current.scrollWidth,
@@ -323,9 +325,6 @@ export function CareerGuidance({ userProfile }) {
       heightLeft -= pageHeight;
 
       while (heightLeft > 0) {
-        // position needs to shift up by the pageHeight for each new page
-        // Since position starts at 0, next page it should be -pageHeight, then -2*pageHeight etc.
-        // But the while loop logic conventionally uses:
         position -= pageHeight;
         pdf.addPage();
         pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
@@ -336,6 +335,8 @@ export function CareerGuidance({ userProfile }) {
     } catch (error) {
       console.error("PDF Generation Error:", error);
       alert("Error generating PDF. Please try again.");
+    } finally {
+      setIsDownloadingPDF(false);
     }
   };
 
@@ -489,10 +490,20 @@ export function CareerGuidance({ userProfile }) {
                             {aiRoadmap && (
                                 <button 
                                     onClick={downloadRoadmapPDF}
-                                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition text-sm font-bold flex items-center gap-2 shadow-sm"
+                                    disabled={isDownloadingPDF}
+                                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg transition text-sm font-bold flex items-center gap-2 shadow-sm"
                                 >
-                                    <Briefcase className="w-4 h-4" />
-                                    Download PDF
+                                    {isDownloadingPDF ? (
+                                        <>
+                                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                            Generating PDF...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Briefcase className="w-4 h-4" />
+                                            Download PDF
+                                        </>
+                                    )}
                                 </button>
                             )}
                         </div>
