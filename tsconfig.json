@@ -21,6 +21,6 @@
     "skipDefaultLibCheck": true,
     "typeRoots": ["./@types", "./node_modules/@types"]
   },
-  "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["node_modules"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "shared/src/**/*.ts"],
+  "exclude": ["node_modules", "mobile", "notehub-backend", "backend-legacy", "dist"]
 }

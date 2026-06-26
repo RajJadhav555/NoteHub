@@ -1,18 +1,15 @@
 @echo off
-echo Installing NoteHub Dependencies...
+cd /d "%~dp0"
+echo ========================================
+echo Installing NoteHub Monorepo Dependencies
+echo ========================================
 echo.
 
-echo [1/2] Installing Frontend Dependencies...
+echo Running npm install at workspace root...
 call npm install
-echo.
-
-echo [2/2] Installing Backend Dependencies...
-cd backend
-call npm install
-cd ..
 
 echo.
 echo ========================================
-echo Dependencies installed successfully!
+echo Monorepo dependencies installed successfully!
 echo ========================================
 pause

@@ -9,7 +9,7 @@ Write-Host "========================================" -ForegroundColor Cyan
 
 # 1. Deploy Backend (Hugging Face / GitHub)
 Write-Host "`n[1/3] Pushing Backend Changes to GitHub (Hugging Face will auto-rebuild)..." -ForegroundColor Yellow
-cd E:\Notehub\notehub-backend
+cd "$PSScriptRoot\notehub-backend"
 
 # Check if there are changes
 $backendChanges = git status --porcelain
@@ -24,7 +24,7 @@ if ($backendChanges) {
 
 # 2. Deploy Frontend (GitHub)
 Write-Host "`n[2/3] Pushing Frontend Changes to GitHub..." -ForegroundColor Yellow
-cd E:\Notehub
+cd "$PSScriptRoot"
 
 # Check if there are changes
 $frontendChanges = git status --porcelain

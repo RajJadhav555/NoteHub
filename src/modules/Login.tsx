@@ -49,6 +49,30 @@ export function LoginPage({ onLoginSuccess }) {
       return;
     }
 
+    // Validate email domain
+    const allowedDomains = [
+      'gmail.com', 'outlook.com', 'yahoo.com', 'hotmail.com',
+      'icloud.com', 'live.com', 'protonmail.com', 'proton.me',
+      'zoho.com', 'gmx.com', 'aol.com', 'mail.com', 'yandex.com',
+      'notehub.com'
+    ];
+    const emailParts = email.split('@');
+    if (emailParts.length === 2) {
+      const domain = emailParts[1].toLowerCase().trim();
+      const isAllowed = allowedDomains.includes(domain) || 
+                        domain.endsWith('.edu') || 
+                        domain.endsWith('.edu.in') || 
+                        domain.endsWith('.ac.in') || 
+                        domain.endsWith('.res.in');
+      if (!isAllowed) {
+        setError("Only authentic email providers (gmail.com, outlook.com, etc.) or academic domains (.edu, .ac.in) are allowed");
+        return;
+      }
+    } else {
+      setError("Please enter a valid email address");
+      return;
+    }
+
     try {
       setIsLoading(true);
       let data;

@@ -2,10 +2,18 @@
   "name": "notehub-app",
   "version": "1.0.0",
   "type": "module",
+  "workspaces": [
+    "notehub-backend",
+    "mobile",
+    "shared"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "dev:backend": "npm run dev --workspace=notehub-backend",
+    "dev:mobile": "npm run start --workspace=mobile",
+    "dev:all": "concurrently \"npm run dev\" \"npm run dev:backend\" \"npm run dev:mobile\""
   },
   "dependencies": {
     "@react-oauth/google": "^0.13.4",
@@ -20,6 +28,7 @@
     "react-dom": "^18.2.0",
     "react-markdown": "^10.1.0",
     "react-router-dom": "^7.14.1",
+    "shared-types": "*",
     "simple-peer": "^9.11.1",
     "socket.io-client": "^4.8.3",
     "vite-plugin-node-polyfills": "^0.25.0"
@@ -28,6 +37,7 @@
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.15",
     "@vitejs/plugin-react": "^4.2.1",
+    "concurrently": "^8.2.2",
     "typescript": "^5.2.2",
     "vite": "^5.0.8"
   }

@@ -1,9 +1,33 @@
 // API Configuration
 export const API_BASE_URL = (import.meta.env && import.meta.env.VITE_API_URL) || 'https://rajdjadhav-notehub-backend.hf.space/api';
 
-// Auth header helper — reads JWT from sessionStorage (where App.tsx stores it)
+// In-memory token store fallback for native environments (Expo Go/React Native)
+let inMemoryToken = null;
+
+// Safe helper to set auth token (both sessionStorage and in-memory fallback)
+export const setAuthToken = (token) => {
+  inMemoryToken = token;
+  if (typeof window !== 'undefined' && window.sessionStorage) {
+    if (token) {
+      sessionStorage.setItem('notehub_token', token);
+    } else {
+      sessionStorage.removeItem('notehub_token');
+    }
+  }
+};
+
+// Safe helper to get auth token
+export const getAuthToken = () => {
+  if (inMemoryToken) return inMemoryToken;
+  if (typeof window !== 'undefined' && window.sessionStorage) {
+    return sessionStorage.getItem('notehub_token');
+  }
+  return null;
+};
+
+// Auth header helper — reads JWT from sessionStorage or in-memory store
 const getAuthHeaders = (includeContentType = true) => {
-  const token = sessionStorage.getItem('notehub_token');
+  const token = getAuthToken();
   const headers = {};
   if (token) headers['Authorization'] = `Bearer ${token}`;
   if (includeContentType) headers['Content-Type'] = 'application/json';
@@ -62,7 +86,7 @@ export const notesAPI = {
 
   uploadNote: async (formData) => {
     try {
-      const token = sessionStorage.getItem('notehub_token');
+      const token = getAuthToken();
       const headers = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
       // Don't set Content-Type for FormData — browser sets it with boundary
@@ -245,7 +269,7 @@ export const usersAPI = {
       }
       const data = await response.json();
       // Store JWT for subsequent requests (matching App.tsx sessionStorage key)
-      if (data.token) sessionStorage.setItem('notehub_token', data.token);
+      if (data.token) setAuthToken(data.token);
       return data;
     } catch (error) {
       console.error('Error during login:', error);
@@ -268,7 +292,7 @@ export const usersAPI = {
       }
       const data = await response.json();
       // Store JWT for subsequent requests (matching App.tsx sessionStorage key)
-      if (data.token) sessionStorage.setItem('notehub_token', data.token);
+      if (data.token) setAuthToken(data.token);
       return data;
     } catch (error) {
       console.error('Error during Google login:', error);
